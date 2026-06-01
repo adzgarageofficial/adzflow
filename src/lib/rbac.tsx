@@ -1,0 +1,288 @@
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+
+export type ModuleKey =
+  | "dashboard"
+  | "pos"
+  | "orders"
+  | "products"
+  | "inventory"
+  | "customers"
+  | "ecommerce"
+  | "analytics"
+  | "marketing"
+  | "finance"
+  | "garage"
+  | "jobOrders"
+  | "quotations"
+  | "fitment"
+  | "bookings"
+  | "employees"
+  | "departments"
+  | "attendance"
+  | "shifts"
+  | "overtime"
+  | "leaves"
+  | "payroll"
+  | "performance"
+  | "recruitment"
+  | "training"
+  | "suppliers"
+  | "purchaseOrders"
+  | "stockTransfers"
+  | "cashDrawer"
+  | "refunds"
+  | "loyalty"
+  | "crm"
+  | "feedback"
+  | "auditLog"
+  | "notifications"
+  | "reports"
+  | "users"
+  | "roles"
+  | "settings";
+
+export type ActionKey = "view" | "create" | "edit" | "delete" | "export" | "approve";
+
+export type Permissions = Partial<Record<ModuleKey, ActionKey[]>>;
+
+export interface Role {
+  id: string;
+  name: string;
+  description: string;
+  system?: boolean;
+  permissions: Permissions;
+}
+
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  username: string;
+  avatar?: string;
+  roleId: string;
+  branch: string;
+  status: "active" | "suspended" | "disabled";
+  lastActive: string;
+}
+
+const ALL_ACTIONS: ActionKey[] = ["view", "create", "edit", "delete", "export", "approve"];
+const ALL_MODULES: ModuleKey[] = [
+  "dashboard", "pos", "orders", "products", "inventory",
+  "customers", "ecommerce", "analytics", "marketing", "finance",
+  "garage", "jobOrders", "quotations", "fitment", "bookings",
+  "employees", "departments",
+  "attendance", "shifts", "overtime",
+  "leaves",
+  "payroll",
+  "performance",
+  "recruitment",
+  "training",
+  "suppliers",
+  "purchaseOrders",
+  "stockTransfers",
+  "cashDrawer",
+  "refunds",
+  "loyalty",
+  "crm",
+  "feedback",
+  "auditLog",
+  "notifications",
+  "reports",
+  "users", "roles", "settings",
+];
+
+const fullAccess = (): Permissions =>
+  Object.fromEntries(ALL_MODULES.map((m) => [m, [...ALL_ACTIONS]])) as Permissions;
+
+export const DEFAULT_ROLES: Role[] = [
+  {
+    id: "owner", name: "Owner", system: true,
+    description: "Full access to every module and setting.",
+    permissions: fullAccess(),
+  },
+  {
+    id: "admin", name: "Admin", system: true,
+    description: "Manage operations. No owner-only settings.",
+    permissions: {
+      ...fullAccess(),
+      settings: ["view", "edit"],
+    },
+  },
+  {
+    id: "cashier", name: "Cashier", system: true,
+    description: "POS, orders and limited customer access.",
+    permissions: {
+      pos: ["view", "create"],
+      orders: ["view", "create"],
+      customers: ["view", "create"],
+      cashDrawer: ["view", "create", "edit"],
+      refunds: ["view", "create"],
+      notifications: ["view"],
+    },
+  },
+  {
+    id: "inventory", name: "Inventory Staff", system: true,
+    description: "Stocks, products and supplier management.",
+    permissions: {
+      products: ["view", "create", "edit"],
+      inventory: ["view", "create", "edit", "approve"],
+      suppliers: ["view", "create", "edit"],
+      purchaseOrders: ["view", "create", "edit", "approve"],
+      stockTransfers: ["view", "create", "edit", "approve"],
+      notifications: ["view"],
+    },
+  },
+  {
+    id: "mechanic", name: "Mechanic / Technician", system: true,
+    description: "Assigned service jobs and installations.",
+    permissions: {
+      orders: ["view", "edit"],
+      notifications: ["view"],
+    },
+  },
+  {
+    id: "marketing", name: "Marketing Staff", system: true,
+    description: "Marketing campaigns, ecommerce and customers.",
+    permissions: {
+      marketing: ["view", "create", "edit"],
+      ecommerce: ["view", "create", "edit"],
+      customers: ["view", "edit", "export"],
+      loyalty: ["view", "create", "edit"],
+      crm: ["view", "create", "edit"],
+      feedback: ["view", "create", "edit"],
+      notifications: ["view"],
+    },
+  },
+  {
+    id: "finance", name: "Finance Staff", system: true,
+    description: "Finance, analytics and sales reports.",
+    permissions: {
+      finance: ["view", "edit", "export", "approve"],
+      analytics: ["view", "export"],
+      orders: ["view", "export"],
+      cashDrawer: ["view", "export"],
+      refunds: ["view", "approve"],
+      reports: ["view", "create", "edit", "export"],
+      auditLog: ["view", "export"],
+      notifications: ["view"],
+    },
+  },
+];
+
+export const DEFAULT_USERS: AppUser[] = [
+  { id: "u1", name: "ADZ Admin", email: "AdzAdminOfficial@gmail.com", username: "adzadmin", roleId: "owner", branch: "Cabanatuan City", status: "active", lastActive: "Just now" },
+];
+
+export const BRANCHES = ["Cabanatuan City", "Quezon City", "Manila", "Warehouse"] as const;
+
+interface RbacContextValue {
+  currentUserId: string;
+  setCurrentUserId: (id: string) => void;
+  currentUser: AppUser;
+  currentRole: Role;
+  users: AppUser[];
+  roles: Role[];
+  setUsers: (u: AppUser[]) => void;
+  setRoles: (r: Role[]) => void;
+  can: (mod: ModuleKey, action?: ActionKey) => boolean;
+}
+
+const Ctx = createContext<RbacContextValue | null>(null);
+
+const LS_USERS = "adz.rbac.users.v2";
+const LS_ROLES = "adz.rbac.roles.v2";
+const LS_CURRENT = "adz.rbac.current.v2";
+
+export function RbacProvider({ children }: { children: ReactNode }) {
+  const [users, setUsersState] = useState<AppUser[]>(DEFAULT_USERS);
+  const [roles, setRolesState] = useState<Role[]>(DEFAULT_ROLES);
+  const [currentUserId, setCurrentUserIdState] = useState<string>("u1");
+
+  useEffect(() => {
+    try {
+      const u = localStorage.getItem(LS_USERS);
+      const r = localStorage.getItem(LS_ROLES);
+      const c = localStorage.getItem(LS_CURRENT);
+      if (u) setUsersState(JSON.parse(u));
+      if (r) setRolesState(JSON.parse(r));
+      if (c) setCurrentUserIdState(c);
+    } catch {}
+  }, []);
+
+  const setUsers = (u: AppUser[]) => {
+    setUsersState(u);
+    try { localStorage.setItem(LS_USERS, JSON.stringify(u)); } catch {}
+  };
+  const setRoles = (r: Role[]) => {
+    setRolesState(r);
+    try { localStorage.setItem(LS_ROLES, JSON.stringify(r)); } catch {}
+  };
+  const setCurrentUserId = (id: string) => {
+    setCurrentUserIdState(id);
+    try { localStorage.setItem(LS_CURRENT, id); } catch {}
+  };
+
+  const value = useMemo<RbacContextValue>(() => {
+    const currentUser = users.find((u) => u.id === currentUserId) ?? users[0];
+    const currentRole =
+      roles.find((r) => r.id === currentUser.roleId) ?? roles[0];
+    const can = (mod: ModuleKey, action: ActionKey = "view") => {
+      const acts = currentRole.permissions[mod];
+      return !!acts && acts.includes(action);
+    };
+    return { currentUserId, setCurrentUserId, currentUser, currentRole, users, roles, setUsers, setRoles, can };
+  }, [users, roles, currentUserId]);
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+export function useRbac() {
+  const ctx = useContext(Ctx);
+  if (!ctx) throw new Error("useRbac must be used inside RbacProvider");
+  return ctx;
+}
+
+export const MODULE_LABELS: Record<ModuleKey, string> = {
+  dashboard: "Dashboard",
+  pos: "POS",
+  orders: "Orders",
+  products: "Products",
+  inventory: "Inventory",
+  customers: "Customers",
+  ecommerce: "Ecommerce",
+  analytics: "Analytics",
+  marketing: "Marketing",
+  finance: "Finance",
+  garage: "Vehicle Garage",
+  jobOrders: "Job Orders",
+  quotations: "Quotations",
+  fitment: "Fitment",
+  bookings: "Bookings",
+  employees: "Employees",
+  departments: "Departments",
+  attendance: "Attendance",
+  shifts: "Shifts",
+  overtime: "Overtime",
+  leaves: "Leave Management",
+  payroll: "Payroll",
+  performance: "Performance",
+  recruitment: "Recruitment",
+  training: "Training",
+  suppliers: "Suppliers",
+  purchaseOrders: "Purchase Orders",
+  stockTransfers: "Stock Transfers",
+  cashDrawer: "Cash Drawer",
+  refunds: "Refunds & Voids",
+  loyalty: "Loyalty Program",
+  crm: "CRM Interactions",
+  feedback: "Customer Feedback",
+  auditLog: "Audit Log",
+  notifications: "Notifications",
+  reports: "Reports",
+  users: "Users",
+  roles: "Roles & Permissions",
+  settings: "Settings",
+};
+
+export const ALL_ACTION_KEYS = ALL_ACTIONS;
+export const ALL_MODULE_KEYS = ALL_MODULES;
