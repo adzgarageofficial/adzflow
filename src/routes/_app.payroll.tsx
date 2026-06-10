@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Banknote,
@@ -13,8 +13,11 @@ import {
   Calendar,
   TrendingUp,
   X,
+  Download,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
+import { downloadElementAsPdf } from "@/lib/pdf";
 import {
   usePayrollPeriods,
   usePayslips,
@@ -31,6 +34,18 @@ import {
 } from "@/lib/payroll-calc";
 
 export const Route = createFileRoute("/_app/payroll")({ component: PayrollPage });
+
+// Mechanic commission: % of labor_cost on completed jobs, or a flat amount per
+// completed job — based on the employee's commission_type/commission_rate.
+// technician_id on job_orders points at auth.users(id), i.e. employees.user_id —
+// NOT employees.id — so jobs must be matched on emp.user_id.
+function computeJobCommission(emp: any, completedJobs: any[]) {
+  const techJobs = emp.user_id ? completedJobs.filter((j: any) => j.technician_id === emp.user_id) : [];
+  const laborRevenue = techJobs.reduce((s: number, j: any) => s + Number(j.labor_cost || 0), 0);
+  const rate = Number(emp.commission_rate || 0);
+  const commission = emp.commission_type === "fixed" ? rate * techJobs.length : laborRevenue * (rate / 100);
+  return { jobCount: techJobs.length, laborRevenue, commission: Math.round(commission * 100) / 100 };
+}
 
 function statusTone(s: string) {
   return {
@@ -98,6 +113,14 @@ function PayrollPage() {
         .gte("log_date", period.period_start)
         .lte("log_date", period.period_end);
 
+      // Fetch completed job orders for the period — basis for mechanic commission
+      const { data: completedJobs } = await (supabase as any)
+        .from("job_orders")
+        .select("technician_id, labor_cost, completed_at")
+        .eq("status", "completed")
+        .gte("completed_at", period.period_start)
+        .lte("completed_at", `${period.period_end} 23:59:59`);
+
       const workingDays = countWorkingDays(period.period_start, period.period_end);
       let totalGross = 0;
       let totalDed = 0;
@@ -109,6 +132,7 @@ function PayrollPage() {
         const daysWorked = new Set(empLogs.map((l: any) => l.log_date)).size;
         const otHours = empLogs.reduce((s: number, l: any) => s + Number(l.overtime_hours || 0), 0);
         const lateMin = empLogs.reduce((s: number, l: any) => s + Number(l.late_minutes || 0), 0);
+        const { commission } = computeJobCommission(emp, completedJobs || []);
 
         const breakdown = computePayroll({
           basicMonthly: Number(emp.basic_salary || 0),
@@ -118,6 +142,7 @@ function PayrollPage() {
           overtimeHours: otHours,
           lateMinutes: lateMin,
           hourlyRate: Number(emp.hourly_rate || 0) || undefined,
+          commission,
         });
 
         const slipNum = `PS-${period.period_code}-${emp.employee_number}`;
@@ -134,6 +159,7 @@ function PayrollPage() {
             basic_pay: breakdown.basicPay,
             allowance: breakdown.allowance,
             overtime_pay: breakdown.overtimePay,
+            commission: breakdown.commission,
             gross_pay: breakdown.grossPay,
             sss: breakdown.sss,
             philhealth: breakdown.philhealth,
@@ -184,6 +210,36 @@ function PayrollPage() {
   };
 
   const selectedPeriod = periods.find((p: any) => p.id === selected);
+
+  // Owner-facing per-mechanic commission report for the selected period —
+  // recomputed from completed job orders so it's accurate even before payslips
+  // are (re)generated. Internal visibility only; never printed on payslips/receipts.
+  const [commissionReport, setCommissionReport] = useState<any[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const mechanics = employees.filter((e: any) => e.user_id && Number(e.commission_rate || 0) > 0);
+      if (!selectedPeriod || mechanics.length === 0) {
+        if (!cancelled) setCommissionReport([]);
+        return;
+      }
+      const { data: jobs } = await (supabase as any)
+        .from("job_orders")
+        .select("technician_id, labor_cost, completed_at")
+        .eq("status", "completed")
+        .gte("completed_at", selectedPeriod.period_start)
+        .lte("completed_at", `${selectedPeriod.period_end} 23:59:59`);
+      if (cancelled) return;
+      const rows = mechanics
+        .map((emp: any) => ({ employee: emp, ...computeJobCommission(emp, jobs || []) }))
+        .filter((r) => r.jobCount > 0)
+        .sort((a, b) => b.commission - a.commission);
+      setCommissionReport(rows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPeriod?.id, employees]);
 
   return (
     <PageShell
@@ -350,6 +406,53 @@ function PayrollPage() {
                   </tbody>
                 </table>
               </div>
+
+              {commissionReport.length > 0 && (
+                <div className="mt-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
+                    <h3 className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                      Mechanic Commission — {selectedPeriod.period_code}
+                    </h3>
+                    <span className="text-[9px] text-muted-foreground/70">(internal only · not on customer receipts)</span>
+                  </div>
+                  <div className="overflow-x-auto rounded-xl border border-border/60">
+                    <table className="w-full text-sm">
+                      <thead className="bg-secondary/40 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <tr>
+                          <th className="text-left p-3">Mechanic</th>
+                          <th className="text-right p-3">Completed Jobs</th>
+                          <th className="text-right p-3">Labor Revenue</th>
+                          <th className="text-right p-3">Rate</th>
+                          <th className="text-right p-3">Commission</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {commissionReport.map((r) => (
+                          <tr key={r.employee.id} className="border-t border-border/50 hover:bg-secondary/30">
+                            <td className="p-3">
+                              <div className="font-medium">{r.employee.first_name} {r.employee.last_name}</div>
+                              <div className="text-[10px] text-muted-foreground font-mono">{r.employee.employee_number}</div>
+                            </td>
+                            <td className="p-3 text-right">{r.jobCount}</td>
+                            <td className="p-3 text-right">{peso(r.laborRevenue)}</td>
+                            <td className="p-3 text-right text-muted-foreground">
+                              {r.employee.commission_type === "fixed" ? `${peso(r.employee.commission_rate)} / job` : `${Number(r.employee.commission_rate)}%`}
+                            </td>
+                            <td className="p-3 text-right font-bold text-emerald-400">{peso(r.commission)}</td>
+                          </tr>
+                        ))}
+                        <tr className="border-t border-border bg-secondary/20">
+                          <td className="p-3 font-semibold" colSpan={4}>Total Commission</td>
+                          <td className="p-3 text-right font-bold text-emerald-400">
+                            {peso(commissionReport.reduce((s, r) => s + r.commission, 0))}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -471,6 +574,12 @@ function PayslipView({ slip, onClose }: { slip: any; onClose: () => void }) {
         <div className="text-sm font-semibold">Payslip Preview</div>
         <div className="flex gap-2">
           <button
+            onClick={() => downloadElementAsPdf(document.getElementById(`payslip-${slip.id}`), `Payslip-${slip.payslip_number}`)}
+            className="h-8 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary"
+          >
+            <Download className="h-3.5 w-3.5" /> PDF
+          </button>
+          <button
             onClick={handlePrint}
             className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold inline-flex items-center gap-1.5"
           >
@@ -534,6 +643,7 @@ function PayslipView({ slip, onClose }: { slip: any; onClose: () => void }) {
                 <PayRow label="Basic Pay" value={slip.basic_pay} />
                 <PayRow label="Allowance" value={slip.allowance} />
                 <PayRow label="Overtime Pay" value={slip.overtime_pay} />
+                {Number(slip.commission) > 0 && <PayRow label="Commission" value={slip.commission} />}
                 {Number(slip.holiday_pay) > 0 && <PayRow label="Holiday Pay" value={slip.holiday_pay} />}
                 {Number(slip.other_earnings) > 0 && <PayRow label="Other" value={slip.other_earnings} />}
                 <tr className="border-t border-border">

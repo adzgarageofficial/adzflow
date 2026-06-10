@@ -226,6 +226,8 @@ function EmployeeFormDialog({ editing, departments, positions, branches, onClose
       allowance: 0,
       daily_rate: 0,
       hourly_rate: 0,
+      commission_type: "percentage",
+      commission_rate: 0,
       ...editing,
     });
   }
@@ -339,6 +341,18 @@ function EmployeeFormDialog({ editing, departments, positions, branches, onClose
               <Field label="Hourly Rate (₱)"><input type="number" className="input" value={form.hourly_rate ?? 0} onChange={(e) => set("hourly_rate", Number(e.target.value))} /></Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
+              <Field label="Commission Type">
+                <select className="input" value={form.commission_type ?? "percentage"} onChange={(e) => set("commission_type", e.target.value)}>
+                  <option value="percentage">% of labor cost per job</option>
+                  <option value="fixed">Fixed ₱ per completed job</option>
+                </select>
+              </Field>
+              <Field label={form.commission_type === "fixed" ? "Commission (₱ per job)" : "Commission Rate (%)"}>
+                <input type="number" step="0.01" className="input" value={form.commission_rate ?? 0} onChange={(e) => set("commission_rate", Number(e.target.value))} />
+              </Field>
+            </div>
+            <p className="text-[11px] text-muted-foreground -mt-1">Mechanic commission is computed automatically from completed job orders during payroll generation. Internal only — never shown on customer receipts.</p>
+            <div className="grid grid-cols-2 gap-3">
               <Field label="Bank Name"><input className="input" value={form.bank_name ?? ""} onChange={(e) => set("bank_name", e.target.value)} /></Field>
               <Field label="Bank Account #"><input className="input" value={form.bank_account_number ?? ""} onChange={(e) => set("bank_account_number", e.target.value)} /></Field>
             </div>
@@ -425,6 +439,14 @@ function EmployeeProfileDialog({ employee, onClose, onEdit }: { employee: any; o
                     <Info label="Basic Salary" value={peso(Number(employee.basic_salary || 0))} />
                     <Info label="Allowance" value={peso(Number(employee.allowance || 0))} />
                     <Info label="Daily Rate" value={peso(Number(employee.daily_rate || 0))} />
+                    {Number(employee.commission_rate || 0) > 0 && (
+                      <Info
+                        label="Commission"
+                        value={employee.commission_type === "fixed"
+                          ? `${peso(Number(employee.commission_rate || 0))} per completed job`
+                          : `${Number(employee.commission_rate || 0)}% of labor cost per job`}
+                      />
+                    )}
                     <Info label="Bank" value={[employee.bank_name, employee.bank_account_number].filter(Boolean).join(" · ")} />
                   </InfoCard>
                   <InfoCard title="Government IDs">

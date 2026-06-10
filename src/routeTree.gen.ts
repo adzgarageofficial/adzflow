@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StockCheck4bb144df5336RouteImport } from './routes/stock-check-4bb144df5336'
+import { Route as ServiceQueueRouteImport } from './routes/service-queue'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
@@ -54,11 +56,22 @@ import { Route as AppAuditLogRouteImport } from './routes/_app.audit-log'
 import { Route as AppAttendanceRouteImport } from './routes/_app.attendance'
 import { Route as AppAnalyticsRouteImport } from './routes/_app.analytics'
 import { Route as AppMyIndexRouteImport } from './routes/_app.my.index'
+import { Route as AppMyQueueRouteImport } from './routes/_app.my.queue'
 import { Route as AppMyPerformanceRouteImport } from './routes/_app.my.performance'
 import { Route as AppMyPayslipsRouteImport } from './routes/_app.my.payslips'
 import { Route as AppMyLeavesRouteImport } from './routes/_app.my.leaves'
 import { Route as AppMyAttendanceRouteImport } from './routes/_app.my.attendance'
 
+const StockCheck4bb144df5336Route = StockCheck4bb144df5336RouteImport.update({
+  id: '/stock-check-4bb144df5336',
+  path: '/stock-check-4bb144df5336',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServiceQueueRoute = ServiceQueueRouteImport.update({
+  id: '/service-queue',
+  path: '/service-queue',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -283,6 +296,11 @@ const AppMyIndexRoute = AppMyIndexRouteImport.update({
   path: '/my/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppMyQueueRoute = AppMyQueueRouteImport.update({
+  id: '/my/queue',
+  path: '/my/queue',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMyPerformanceRoute = AppMyPerformanceRouteImport.update({
   id: '/my/performance',
   path: '/my/performance',
@@ -307,6 +325,8 @@ const AppMyAttendanceRoute = AppMyAttendanceRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/service-queue': typeof ServiceQueueRoute
+  '/stock-check-4bb144df5336': typeof StockCheck4bb144df5336Route
   '/analytics': typeof AppAnalyticsRoute
   '/attendance': typeof AppAttendanceRoute
   '/audit-log': typeof AppAuditLogRoute
@@ -352,10 +372,13 @@ export interface FileRoutesByFullPath {
   '/my/leaves': typeof AppMyLeavesRoute
   '/my/payslips': typeof AppMyPayslipsRoute
   '/my/performance': typeof AppMyPerformanceRoute
+  '/my/queue': typeof AppMyQueueRoute
   '/my/': typeof AppMyIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/service-queue': typeof ServiceQueueRoute
+  '/stock-check-4bb144df5336': typeof StockCheck4bb144df5336Route
   '/analytics': typeof AppAnalyticsRoute
   '/attendance': typeof AppAttendanceRoute
   '/audit-log': typeof AppAuditLogRoute
@@ -402,12 +425,15 @@ export interface FileRoutesByTo {
   '/my/leaves': typeof AppMyLeavesRoute
   '/my/payslips': typeof AppMyPayslipsRoute
   '/my/performance': typeof AppMyPerformanceRoute
+  '/my/queue': typeof AppMyQueueRoute
   '/my': typeof AppMyIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/service-queue': typeof ServiceQueueRoute
+  '/stock-check-4bb144df5336': typeof StockCheck4bb144df5336Route
   '/_app/analytics': typeof AppAnalyticsRoute
   '/_app/attendance': typeof AppAttendanceRoute
   '/_app/audit-log': typeof AppAuditLogRoute
@@ -454,6 +480,7 @@ export interface FileRoutesById {
   '/_app/my/leaves': typeof AppMyLeavesRoute
   '/_app/my/payslips': typeof AppMyPayslipsRoute
   '/_app/my/performance': typeof AppMyPerformanceRoute
+  '/_app/my/queue': typeof AppMyQueueRoute
   '/_app/my/': typeof AppMyIndexRoute
 }
 export interface FileRouteTypes {
@@ -461,6 +488,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/service-queue'
+    | '/stock-check-4bb144df5336'
     | '/analytics'
     | '/attendance'
     | '/audit-log'
@@ -506,10 +535,13 @@ export interface FileRouteTypes {
     | '/my/leaves'
     | '/my/payslips'
     | '/my/performance'
+    | '/my/queue'
     | '/my/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/service-queue'
+    | '/stock-check-4bb144df5336'
     | '/analytics'
     | '/attendance'
     | '/audit-log'
@@ -556,11 +588,14 @@ export interface FileRouteTypes {
     | '/my/leaves'
     | '/my/payslips'
     | '/my/performance'
+    | '/my/queue'
     | '/my'
   id:
     | '__root__'
     | '/_app'
     | '/login'
+    | '/service-queue'
+    | '/stock-check-4bb144df5336'
     | '/_app/analytics'
     | '/_app/attendance'
     | '/_app/audit-log'
@@ -607,16 +642,33 @@ export interface FileRouteTypes {
     | '/_app/my/leaves'
     | '/_app/my/payslips'
     | '/_app/my/performance'
+    | '/_app/my/queue'
     | '/_app/my/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ServiceQueueRoute: typeof ServiceQueueRoute
+  StockCheck4bb144df5336Route: typeof StockCheck4bb144df5336Route
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/stock-check-4bb144df5336': {
+      id: '/stock-check-4bb144df5336'
+      path: '/stock-check-4bb144df5336'
+      fullPath: '/stock-check-4bb144df5336'
+      preLoaderRoute: typeof StockCheck4bb144df5336RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service-queue': {
+      id: '/service-queue'
+      path: '/service-queue'
+      fullPath: '/service-queue'
+      preLoaderRoute: typeof ServiceQueueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -932,6 +984,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMyIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/my/queue': {
+      id: '/_app/my/queue'
+      path: '/my/queue'
+      fullPath: '/my/queue'
+      preLoaderRoute: typeof AppMyQueueRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/my/performance': {
       id: '/_app/my/performance'
       path: '/my/performance'
@@ -1010,6 +1069,7 @@ interface AppRouteChildren {
   AppMyLeavesRoute: typeof AppMyLeavesRoute
   AppMyPayslipsRoute: typeof AppMyPayslipsRoute
   AppMyPerformanceRoute: typeof AppMyPerformanceRoute
+  AppMyQueueRoute: typeof AppMyQueueRoute
   AppMyIndexRoute: typeof AppMyIndexRoute
 }
 
@@ -1060,6 +1120,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppMyLeavesRoute: AppMyLeavesRoute,
   AppMyPayslipsRoute: AppMyPayslipsRoute,
   AppMyPerformanceRoute: AppMyPerformanceRoute,
+  AppMyQueueRoute: AppMyQueueRoute,
   AppMyIndexRoute: AppMyIndexRoute,
 }
 
@@ -1068,6 +1129,8 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  ServiceQueueRoute: ServiceQueueRoute,
+  StockCheck4bb144df5336Route: StockCheck4bb144df5336Route,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

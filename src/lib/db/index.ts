@@ -145,6 +145,9 @@ export const useServices = () =>
 export const useFinanceTxns = () =>
   useList<any>("finance_transactions", { order: { column: "txn_date", ascending: false } });
 
+export const useRecurringBills = () =>
+  useList<any>("recurring_bills", { order: { column: "next_due_date", ascending: true } });
+
 export const useCampaigns = () =>
   useList<any>("marketing_campaigns", { order: { column: "created_at", ascending: false } });
 
@@ -153,7 +156,7 @@ export const useDiscounts = () =>
 
 export const useInventoryLevels = () =>
   useList<any>("inventory_levels", {
-    select: "*, product:products(id,name,sku,base_price,cost_price,retail_price), warehouse:warehouses(id,name)",
+    select: "*, product:products(id,name,sku,description,specs,base_price,cost_price,retail_price,brand:brands(id,name),category:categories(id,name)), warehouse:warehouses(id,name)",
   });
 
 export const useQuotations = () =>
@@ -173,7 +176,7 @@ export const usePurchaseOrders = () =>
 
 export const useStockMovements = () =>
   useList<any>("stock_movements", {
-    select: "*, product:products(id,name,sku), warehouse:warehouses(id,name)",
+    select: "*, product:products(id,name,sku,specs,brand:brands(id,name),category:categories(id,name)), warehouse:warehouses(id,name)",
     order: { column: "created_at", ascending: false },
   });
 
@@ -205,6 +208,9 @@ export const useAuditLogs = () =>
 export const useNotifications = () =>
   useList<any>("notifications", { order: { column: "created_at", ascending: false } });
 
+export const useDiscountApprovals = (queryOpts?: Partial<UseQueryOptions<any[]>>) =>
+  useList<any>("discount_approvals", { order: { column: "created_at", ascending: false } }, queryOpts);
+
 export const useCompanySettings = () =>
   useList<any>("company_settings", { order: { column: "created_at", ascending: true } });
 
@@ -222,6 +228,7 @@ export const usePurchaseOrderItems = (poId?: string) =>
 
 export const useJobOrderHistory = (jobId?: string) =>
   useList<any>("job_order_status_history", {
+    select: "*, changed_by_profile:profiles(id,display_name)",
     order: { column: "created_at", ascending: false },
     filters: jobId ? (q: any) => q.eq("job_order_id", jobId) : undefined,
   });
@@ -235,6 +242,23 @@ export const useOrderItems = (orderId?: string) =>
       if (error) throw error;
       return data ?? [];
     },
+  });
+
+export const useOrderPayments = (orderId?: string) =>
+  useQuery<any[]>({
+    queryKey: ["order_payments", orderId],
+    enabled: !!orderId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("order_payments").select("*").eq("order_id", orderId!).order("paid_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+export const useAllOrderItems = () =>
+  useList<any>("order_items", {
+    select: "*, order:orders(id,created_at,status,channel), product:products(id,name,category:categories(id,name))",
+    order: { column: "created_at", ascending: false },
   });
 
 export { handleErr };
@@ -443,18 +467,38 @@ export function useCurrentUserRoles() {
     queryFn: async () => {
       const { data: u } = await supabase.auth.getUser();
       const uid = u.user?.id;
-      if (!uid) return [];
+      console.log("[roles] uid:", uid, "email:", u.user?.email);
+      if (!uid) { console.log("[roles] no uid → returning []"); return []; }
       const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", uid);
+      console.log("[roles] query result:", data, "error:", error);
       if (error) return [];
       return (data ?? []).map((r: any) => r.role as string);
     },
-    staleTime: 60_000,
   });
 }
 
 export function useIsOwner() {
   const { data: roles = [] } = useCurrentUserRoles();
   return roles.includes("owner");
+}
+
+export function useMyProfile() {
+  return useQuery<any | null>({
+    queryKey: ["my_profile"],
+    queryFn: async () => {
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id;
+      if (!uid) return null;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*, branch:branches(id,name)")
+        .eq("id", uid)
+        .maybeSingle();
+      if (error) return null;
+      return data;
+    },
+    staleTime: 60_000,
+  });
 }
 
 export function useSetUserRole() {

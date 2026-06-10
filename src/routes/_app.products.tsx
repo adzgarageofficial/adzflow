@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
 import { SubNav, CATALOG_NAV } from "@/components/sub-nav";
 import { useProducts, useBrands, useCategories, useInsert, useUpdate, useDelete, peso, useIsOwner } from "@/lib/db";
+import { useRbac } from "@/lib/rbac";
 import { useMemo, useState } from "react";
 import { Search, Plus, Package, Tag, Layers, Sparkles, Pencil, Trash2, Wrench } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -26,6 +27,7 @@ type Product = {
   is_service: boolean;
   image_url: string | null;
   tags: string[] | null;
+  specs: Record<string, any> | null;
   brand?: { id: string; name: string } | null;
   category?: { id: string; name: string } | null;
 };
@@ -37,6 +39,9 @@ const statusStyles: Record<string, string> = {
 };
 
 function Products() {
+  const { can } = useRbac();
+  const canViewPrices = can("finance", "view");
+
   const { data: products = [], isLoading } = useProducts();
   const { data: brands = [] } = useBrands();
   const { data: categories = [] } = useCategories();
@@ -62,7 +67,8 @@ function Products() {
       if (category !== "All" && p.category?.name !== category) return false;
       if (q) {
         const s = q.toLowerCase();
-        if (!p.name.toLowerCase().includes(s) && !p.sku.toLowerCase().includes(s)) return false;
+        const haystack = [p.sku, p.name, p.description, p.brand?.name, p.category?.name].filter(Boolean).join(" ").toLowerCase();
+        if (!haystack.includes(s)) return false;
       }
       return true;
     });
@@ -104,7 +110,7 @@ function Products() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search name or SKU…"
+              placeholder="Search item code, brand, item name, description…"
               className="w-full h-10 pl-9 pr-3 rounded-xl bg-secondary/60 border border-border text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
@@ -148,66 +154,80 @@ function Products() {
       ) : view === "grid" ? (
         <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <AnimatePresence>
-            {filtered.map((p) => (
-              <motion.div
-                key={p.id}
-                layout
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                whileHover={{ y: -3 }}
-                className="group rounded-2xl bg-card border border-border shadow-soft p-4 cursor-pointer"
-                onClick={() => setEditing(p)}
-              >
-                <div className="relative h-32 rounded-xl bg-gradient-surface border border-border grid place-items-center overflow-hidden">
-                  {p.image_url ? <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" /> : <Package className="h-10 w-10 text-muted-foreground" />}
-                  <span className={`absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md ring-1 ${statusStyles[p.status]}`}>{p.status}</span>
-                </div>
-                <div className="mt-3">
-                  <p className="text-sm font-semibold truncate">{p.name}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">{p.brand?.name ?? "—"} • {p.sku}</p>
-                </div>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="font-bold">{peso(Number(p.retail_price ?? p.base_price))}</span>
-                  <span className="text-[10px] font-semibold text-primary uppercase tracking-wide">{p.category?.name ?? ""}</span>
-                </div>
-              </motion.div>
-            ))}
+            {filtered.map((p) => {
+              const uom = (p.specs as any)?.uom;
+              return (
+                <motion.div
+                  key={p.id}
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  whileHover={{ y: -3 }}
+                  className="group rounded-2xl bg-card border border-border shadow-soft p-4 cursor-pointer"
+                  onClick={() => setEditing(p)}
+                >
+                  <div className="relative h-32 rounded-xl bg-gradient-surface border border-border grid place-items-center overflow-hidden">
+                    {p.image_url ? <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" /> : <Package className="h-10 w-10 text-muted-foreground" />}
+                    <span className={`absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md ring-1 ${statusStyles[p.status]}`}>{p.status}</span>
+                    {uom && <span className="absolute top-2 right-2 text-[10px] font-semibold bg-background/80 px-1.5 py-0.5 rounded">{uom}</span>}
+                  </div>
+                  <div className="mt-3 space-y-0.5">
+                    <p className="text-[10px] font-mono text-muted-foreground">{p.sku}</p>
+                    <p className="text-xs font-bold text-primary">{p.brand?.name ?? "—"} · {p.category?.name ?? "—"}</p>
+                    <p className="text-sm font-semibold truncate">{p.description ?? p.name}</p>
+                  </div>
+                  {canViewPrices && (
+                    <div className="mt-2 flex items-center justify-between">
+                      <span className="font-bold text-sm">{p.retail_price || p.base_price ? peso(Number(p.retail_price ?? p.base_price)) : "—"}</span>
+                      <span className="text-[10px] text-muted-foreground">SRP</span>
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
         </div>
       ) : (
         <div className="mt-5 rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-secondary/60 text-[11px] uppercase tracking-wider text-muted-foreground">
               <tr className="text-left">
-                <th className="px-4 py-3 font-medium">Product</th>
-                <th className="px-4 py-3 font-medium">SKU</th>
-                <th className="px-4 py-3 font-medium">Brand</th>
-                <th className="px-4 py-3 font-medium">Category</th>
-                <th className="px-4 py-3 font-medium">Price</th>
-                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap">ITEM CODE</th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap">BRAND</th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap">ITEM NAME</th>
+                <th className="px-4 py-3 font-semibold">DESCRIPTIONS</th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap">UOM</th>
+                {canViewPrices && <th className="px-4 py-3 font-semibold whitespace-nowrap">SRP</th>}
+                <th className="px-4 py-3 font-semibold whitespace-nowrap">STATUS</th>
                 <th className="px-4 py-3 w-20"></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => (
-                <tr key={p.id} className="border-t border-border hover:bg-secondary/40">
-                  <td className="px-4 py-3 font-medium">{p.name}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.sku}</td>
-                  <td className="px-4 py-3">{p.brand?.name ?? "—"}</td>
-                  <td className="px-4 py-3">{p.category?.name ?? "—"}</td>
-                  <td className="px-4 py-3 font-semibold">{peso(Number(p.retail_price ?? p.base_price))}</td>
-                  <td className="px-4 py-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ring-1 ${statusStyles[p.status]}`}>{p.status}</span></td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => setEditing(p)} className="p-1.5 rounded-lg hover:bg-secondary"><Pencil className="h-3.5 w-3.5" /></button>
-                      <button onClick={() => { if (confirm(`Delete ${p.name}?`)) del.mutate(p.id, { onSuccess: () => toast.success("Deleted") }); }} className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((p) => {
+                const uom = (p.specs as any)?.uom ?? "—";
+                return (
+                  <tr key={p.id} className="border-t border-border hover:bg-secondary/40">
+                    <td className="px-4 py-2.5 font-mono text-xs font-semibold text-muted-foreground whitespace-nowrap">{p.sku}</td>
+                    <td className="px-4 py-2.5 font-medium whitespace-nowrap">{p.brand?.name ?? "—"}</td>
+                    <td className="px-4 py-2.5 whitespace-nowrap">{p.category?.name ?? "—"}</td>
+                    <td className="px-4 py-2.5 max-w-[240px] truncate text-muted-foreground" title={p.description ?? ""}>{p.description ?? p.name}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{uom}</td>
+                    {canViewPrices && <td className="px-4 py-2.5 font-semibold whitespace-nowrap">{p.retail_price || p.base_price ? peso(Number(p.retail_price ?? p.base_price)) : "—"}</td>}
+                    <td className="px-4 py-2.5"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ring-1 ${statusStyles[p.status]}`}>{p.status}</span></td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => setEditing(p)} className="p-1.5 rounded-lg hover:bg-secondary"><Pencil className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => { if (confirm(`Delete ${p.name}?`)) del.mutate(p.id, { onSuccess: () => toast.success("Deleted") }); }} className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -245,6 +265,8 @@ function Select({ value, onChange, options, icon }: { value: string; onChange: (
   );
 }
 
+const UOM_OPTIONS = ["Pc", "Sets", "Pair", "Box", "Pack", "Roll", "Liter", "Gallon", "Meter", "Kg"];
+
 function ProductDialog({
   editing, onClose, onSave, busy, brands, categories,
 }: {
@@ -255,69 +277,148 @@ function ProductDialog({
   brands: any[];
   categories: any[];
 }) {
+  const { can } = useRbac();
+  const canViewPrices = can("finance", "view");
   const [form, setForm] = useState<Partial<Product>>({});
+  const [uom, setUom] = useState("");
+  const [color, setColor] = useState("");
+
+  // Reset form when editing target changes
   if (editing && (form.id ?? undefined) !== (editing.id ?? undefined)) {
     setForm(editing);
+    const s = (editing.specs ?? {}) as any;
+    setUom(s.uom ?? "");
+    setColor(s.color ?? "");
   }
+
+  const selectedCategory = categories.find((c: any) => c.id === form.category_id);
+
+  function handleSave() {
+    // Auto-generate name from ITEM NAME (category) + DESCRIPTIONS if not manually set
+    const autoName = [selectedCategory?.name, form.description].filter(Boolean).join(" ").trim();
+    const finalName = form.name?.trim() || autoName;
+    if (!finalName || !form.sku) return;
+    const specs: Record<string, string> = {};
+    if (uom) specs.uom = uom;
+    if (color) specs.color = color.toUpperCase();
+    onSave({ ...form, name: finalName, specs: Object.keys(specs).length ? specs : null });
+  }
+
+  const f = (key: keyof Product, val: any) => setForm((p) => ({ ...p, [key]: val }));
 
   return (
     <Dialog open={!!editing} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing?.id ? "Edit Product" : "New Product"}</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Name" required full>
-            <input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm" placeholder="Synthetic Oil 5W-30 (1L)" />
+
+        {/* ── Section 1: Product Identity (matches Excel MM columns) ── */}
+        <div className="mt-1">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-2">Product Identity</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="ITEM CODE *" full={false}>
+              <input value={form.sku ?? ""} onChange={(e) => f("sku", e.target.value)}
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-mono"
+                placeholder="e.g. UCA-RGGDPRO-0001" />
+            </Field>
+            <Field label="BRAND">
+              <select value={form.brand_id ?? ""} onChange={(e) => f("brand_id", e.target.value || null)}
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm">
+                <option value="">— Select Brand —</option>
+                {brands.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </Field>
+            <Field label="ITEM NAME (Category) *">
+              <select value={form.category_id ?? ""} onChange={(e) => f("category_id", e.target.value || null)}
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm">
+                <option value="">— Select Item Name —</option>
+                {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+            <Field label="UOM (Unit of Measure)">
+              <select value={uom} onChange={(e) => setUom(e.target.value)}
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm">
+                <option value="">— Select UOM —</option>
+                {UOM_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
+                <option value="__custom">Other…</option>
+              </select>
+              {uom === "__custom" && (
+                <input autoFocus placeholder="Enter UOM" onChange={(e) => setUom(e.target.value)}
+                  className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm" />
+              )}
+            </Field>
+            <Field label="DESCRIPTIONS *" full>
+              <input value={form.description ?? ""} onChange={(e) => f("description", e.target.value)}
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                placeholder="e.g. HILUX REVO 2012-2024 RED" />
+            </Field>
+            <Field label="COLOR">
+              <input value={color} onChange={(e) => setColor(e.target.value)}
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                placeholder="RED / BLACK / SILVER" />
+            </Field>
+            <Field label="STATUS">
+              <select value={form.status ?? "active"} onChange={(e) => f("status", e.target.value)}
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm">
+                <option value="active">Active</option>
+                <option value="draft">Draft</option>
+                <option value="archived">Archived</option>
+              </select>
+            </Field>
+          </div>
+        </div>
+
+        {/* ── Section 2: Pricing ── */}
+        {canViewPrices && (
+        <div className="mt-4">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-2">Pricing</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="SRP (Suggested Retail Price)">
+              <input type="number" step="0.01" min={0}
+                value={form.retail_price ?? ""}
+                onChange={(e) => f("retail_price", e.target.value ? Number(e.target.value) : null)}
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                placeholder="0.00" />
+            </Field>
+            <Field label="PURCHASE PRICE (Cost)">
+              <input type="number" step="0.01" min={0}
+                value={form.cost_price ?? 0}
+                onChange={(e) => f("cost_price", Number(e.target.value))}
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                placeholder="0.00" />
+            </Field>
+            <Field label="WHOLESALE PRICE">
+              <input type="number" step="0.01" min={0}
+                value={form.wholesale_price ?? ""}
+                onChange={(e) => f("wholesale_price", e.target.value ? Number(e.target.value) : null)}
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                placeholder="0.00" />
+            </Field>
+          </div>
+        </div>
+        )}
+
+        {/* ── Section 3: Extras ── */}
+        <div className="mt-4 space-y-3">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Other</p>
+          <Field label="Image URL">
+            <input value={form.image_url ?? ""} onChange={(e) => f("image_url", e.target.value)}
+              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" placeholder="https://…" />
           </Field>
-          <Field label="SKU" required>
-            <input value={form.sku ?? ""} onChange={(e) => setForm({ ...form, sku: e.target.value })} className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm font-mono" placeholder="OIL-5W30-1L" />
-          </Field>
-          <Field label="Status">
-            <select value={form.status ?? "active"} onChange={(e) => setForm({ ...form, status: e.target.value as any })} className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm">
-              <option value="active">Active</option>
-              <option value="draft">Draft</option>
-              <option value="archived">Archived</option>
-            </select>
-          </Field>
-          <Field label="Brand">
-            <select value={form.brand_id ?? ""} onChange={(e) => setForm({ ...form, brand_id: e.target.value || null })} className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm">
-              <option value="">—</option>
-              {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Category">
-            <select value={form.category_id ?? ""} onChange={(e) => setForm({ ...form, category_id: e.target.value || null })} className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm">
-              <option value="">—</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Cost Price">
-            <input type="number" step="0.01" value={form.cost_price ?? 0} onChange={(e) => setForm({ ...form, cost_price: Number(e.target.value) })} className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm" />
-          </Field>
-          <Field label="Base Price" required>
-            <input type="number" step="0.01" value={form.base_price ?? 0} onChange={(e) => setForm({ ...form, base_price: Number(e.target.value) })} className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm" />
-          </Field>
-          <Field label="Retail Price">
-            <input type="number" step="0.01" value={form.retail_price ?? ""} onChange={(e) => setForm({ ...form, retail_price: e.target.value ? Number(e.target.value) : null })} className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm" />
-          </Field>
-          <Field label="Wholesale Price">
-            <input type="number" step="0.01" value={form.wholesale_price ?? ""} onChange={(e) => setForm({ ...form, wholesale_price: e.target.value ? Number(e.target.value) : null })} className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm" />
-          </Field>
-          <Field label="Image URL" full>
-            <input value={form.image_url ?? ""} onChange={(e) => setForm({ ...form, image_url: e.target.value })} className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm" placeholder="https://…" />
-          </Field>
-          <Field label="Description" full>
-            <textarea value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm" />
-          </Field>
-          <label className="col-span-2 inline-flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={!!form.is_service} onChange={(e) => setForm({ ...form, is_service: e.target.checked })} className="h-4 w-4 accent-foreground" />
-            This is a service (no inventory)
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={!!form.is_service} onChange={(e) => f("is_service", e.target.checked)} className="h-4 w-4 accent-foreground" />
+            This is a service (walang physical inventory)
           </label>
         </div>
-        <div className="flex justify-end gap-2 mt-4">
+
+        <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="h-9 px-4 rounded-lg border border-border text-sm">Cancel</button>
-          <button disabled={busy || !form.name || !form.sku} onClick={() => onSave(form)} className="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">{busy ? "Saving…" : "Save"}</button>
+          <button disabled={busy || !form.sku || (!form.description && !form.name)}
+            onClick={handleSave}
+            className="h-9 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold disabled:opacity-50">
+            {busy ? "Saving…" : "Save Product"}
+          </button>
         </div>
       </DialogContent>
     </Dialog>

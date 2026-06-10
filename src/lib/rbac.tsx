@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMyProfile, useCurrentUserRoles, useProfiles, useUserRoles } from "@/lib/db";
 
 export type ModuleKey =
   | "dashboard"
@@ -169,69 +170,79 @@ export const DEFAULT_ROLES: Role[] = [
   },
 ];
 
-export const DEFAULT_USERS: AppUser[] = [
-  { id: "u1", name: "ADZ Admin", email: "AdzAdminOfficial@gmail.com", username: "adzadmin", roleId: "owner", branch: "Cabanatuan City", status: "active", lastActive: "Just now" },
-];
-
-export const BRANCHES = ["Cabanatuan City", "Quezon City", "Manila", "Warehouse"] as const;
-
 interface RbacContextValue {
-  currentUserId: string;
-  setCurrentUserId: (id: string) => void;
   currentUser: AppUser;
   currentRole: Role;
   users: AppUser[];
   roles: Role[];
-  setUsers: (u: AppUser[]) => void;
   setRoles: (r: Role[]) => void;
   can: (mod: ModuleKey, action?: ActionKey) => boolean;
 }
 
 const Ctx = createContext<RbacContextValue | null>(null);
 
-const LS_USERS = "adz.rbac.users.v2";
 const LS_ROLES = "adz.rbac.roles.v2";
-const LS_CURRENT = "adz.rbac.current.v2";
 
+const FALLBACK_USER: AppUser = {
+  id: "", name: "…", email: "", username: "", roleId: "cashier",
+  branch: "—", status: "active", lastActive: "",
+};
+
+function toAppUser(profile: any, roleId: string): AppUser {
+  const handle = profile.email?.split("@")[0] ?? "user";
+  return {
+    id: profile.id,
+    name: profile.display_name ?? handle,
+    email: profile.email ?? "",
+    username: profile.username ?? handle,
+    avatar: profile.avatar_url ?? undefined,
+    roleId,
+    branch: profile.branch?.name ?? "—",
+    status: profile.status ?? "active",
+    lastActive: profile.last_active ? new Date(profile.last_active).toLocaleString() : "—",
+  };
+}
+
+/**
+ * Permissions are still keyed off the editable role matrix below (and persisted
+ * locally so the Roles page can customize them), but WHICH role applies to the
+ * signed-in person now comes straight from Supabase `user_roles` — so each
+ * employee only ever sees the modules their real, assigned role grants.
+ */
 export function RbacProvider({ children }: { children: ReactNode }) {
-  const [users, setUsersState] = useState<AppUser[]>(DEFAULT_USERS);
   const [roles, setRolesState] = useState<Role[]>(DEFAULT_ROLES);
-  const [currentUserId, setCurrentUserIdState] = useState<string>("u1");
 
   useEffect(() => {
     try {
-      const u = localStorage.getItem(LS_USERS);
       const r = localStorage.getItem(LS_ROLES);
-      const c = localStorage.getItem(LS_CURRENT);
-      if (u) setUsersState(JSON.parse(u));
       if (r) setRolesState(JSON.parse(r));
-      if (c) setCurrentUserIdState(c);
     } catch {}
   }, []);
 
-  const setUsers = (u: AppUser[]) => {
-    setUsersState(u);
-    try { localStorage.setItem(LS_USERS, JSON.stringify(u)); } catch {}
-  };
   const setRoles = (r: Role[]) => {
     setRolesState(r);
     try { localStorage.setItem(LS_ROLES, JSON.stringify(r)); } catch {}
   };
-  const setCurrentUserId = (id: string) => {
-    setCurrentUserIdState(id);
-    try { localStorage.setItem(LS_CURRENT, id); } catch {}
-  };
+
+  const { data: myProfile } = useMyProfile();
+  const { data: myRoles = [] } = useCurrentUserRoles();
+  const { data: profiles = [] } = useProfiles();
+  const { data: userRoles = [] } = useUserRoles();
 
   const value = useMemo<RbacContextValue>(() => {
-    const currentUser = users.find((u) => u.id === currentUserId) ?? users[0];
-    const currentRole =
-      roles.find((r) => r.id === currentUser.roleId) ?? roles[0];
+    const myRoleId = myRoles[0] ?? "cashier";
+    const currentRole = roles.find((r) => r.id === myRoleId) ?? roles[0];
+    const currentUser = myProfile ? toAppUser(myProfile, myRoleId) : FALLBACK_USER;
+
+    const roleByUser = new Map<string, string>((userRoles as any[]).map((r) => [r.user_id, r.role]));
+    const users = (profiles as any[]).map((p) => toAppUser(p, roleByUser.get(p.id) ?? "cashier"));
+
     const can = (mod: ModuleKey, action: ActionKey = "view") => {
       const acts = currentRole.permissions[mod];
       return !!acts && acts.includes(action);
     };
-    return { currentUserId, setCurrentUserId, currentUser, currentRole, users, roles, setUsers, setRoles, can };
-  }, [users, roles, currentUserId]);
+    return { currentUser, currentRole, users, roles, setRoles, can };
+  }, [roles, myProfile, myRoles, profiles, userRoles]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -1,7 +1,7 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
-import { peso } from "@/lib/mock-data";
+import { peso, useOrders, useAllOrderItems, useJobOrders, useCustomers } from "@/lib/db";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer,
@@ -12,7 +12,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths, differenceInDays, eachDayOfInterval } from "date-fns";
+import {
+  format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths,
+  differenceInDays, differenceInCalendarMonths, addMonths, eachDayOfInterval,
+} from "date-fns";
 import {
   CalendarIcon, TrendingUp, TrendingDown, DollarSign, ShoppingCart,
   Package, Users, Wrench, Tag, ArrowUpRight, ArrowDownRight,
@@ -47,82 +50,122 @@ function rangeForPreset(key: PresetKey, custom?: DateRange): { from: Date; to: D
   }
 }
 
-// Seeded pseudo-random for deterministic mock generation
-function seeded(seed: number) {
-  let s = seed % 2147483647;
-  if (s <= 0) s += 2147483646;
-  return () => (s = (s * 16807) % 2147483647) / 2147483647;
+function inDateRange(dateStr: string | null | undefined, fromKey: string, toKey: string) {
+  const k = (dateStr ?? "").slice(0, 10);
+  return k >= fromKey && k <= toKey;
 }
 
-function generateSeries(from: Date, to: Date) {
+function buildRevenueSeries(orders: any[], from: Date, to: Date) {
   const days = eachDayOfInterval({ start: from, end: to });
   const bucket: "hour" | "day" | "week" | "month" =
     days.length <= 1 ? "hour" : days.length <= 31 ? "day" : days.length <= 120 ? "week" : "month";
 
-  const rand = seeded(Math.floor(from.getTime() / 86400000) + days.length * 31);
+  const fromKey = format(from, "yyyy-MM-dd");
+  const toKey = format(to, "yyyy-MM-dd");
+  const inRange = (orders as any[]).filter((o) => o.status !== "cancelled" && inDateRange(o.created_at, fromKey, toKey));
 
-  let series: { label: string; revenue: number; orders: number }[] = [];
+  let series: { label: string; revenue: number; orders: number }[];
+
   if (bucket === "hour") {
-    series = Array.from({ length: 24 }, (_, i) => {
-      const base = 800 + Math.sin((i - 6) / 3) * 600 + rand() * 400;
-      const rev = Math.max(0, Math.round(base * 60));
-      return { label: `${i.toString().padStart(2, "0")}:00`, revenue: rev, orders: Math.round(rev / 1100) };
-    });
+    series = Array.from({ length: 24 }, (_, i) => ({ label: `${i.toString().padStart(2, "0")}:00`, revenue: 0, orders: 0 }));
+    for (const o of inRange) {
+      const h = new Date(o.created_at).getHours();
+      series[h].revenue += Number(o.total) || 0;
+      series[h].orders += 1;
+    }
   } else if (bucket === "day") {
-    series = days.map((d) => {
-      const weekend = d.getDay() === 0 || d.getDay() === 6 ? 1.35 : 1;
-      const rev = Math.round((18000 + rand() * 22000) * weekend);
-      return { label: format(d, days.length <= 14 ? "EEE d" : "MMM d"), revenue: rev, orders: Math.round(rev / 850) };
-    });
+    const entries: [string, { label: string; revenue: number; orders: number }][] = days.map((d) => [format(d, "yyyy-MM-dd"), { label: format(d, days.length <= 14 ? "EEE d" : "MMM d"), revenue: 0, orders: 0 }]);
+    const map = new Map(entries);
+    for (const o of inRange) {
+      const entry = map.get((o.created_at ?? "").slice(0, 10));
+      if (entry) { entry.revenue += Number(o.total) || 0; entry.orders += 1; }
+    }
+    series = entries.map(([, v]) => v);
   } else if (bucket === "week") {
     const weeks = Math.ceil(days.length / 7);
-    series = Array.from({ length: weeks }, (_, i) => {
-      const rev = Math.round(140000 + rand() * 90000);
-      return { label: `W${i + 1}`, revenue: rev, orders: Math.round(rev / 870) };
-    });
+    series = Array.from({ length: weeks }, (_, i) => ({ label: `W${i + 1}`, revenue: 0, orders: 0 }));
+    for (const o of inRange) {
+      const idx = Math.min(weeks - 1, Math.max(0, Math.floor(differenceInDays(new Date(o.created_at), from) / 7)));
+      series[idx].revenue += Number(o.total) || 0;
+      series[idx].orders += 1;
+    }
   } else {
-    const months = Math.max(1, Math.ceil(days.length / 30));
-    series = Array.from({ length: months }, (_, i) => {
-      const rev = Math.round(580000 + rand() * 320000);
-      return { label: format(new Date(from.getFullYear(), from.getMonth() + i, 1), "MMM"), revenue: rev, orders: Math.round(rev / 880) };
+    const monthsCount = differenceInCalendarMonths(to, from) + 1;
+    const entries: [string, { label: string; revenue: number; orders: number }][] = Array.from({ length: monthsCount }, (_, i) => {
+      const m = addMonths(startOfMonth(from), i);
+      return [format(m, "yyyy-MM"), { label: format(m, "MMM"), revenue: 0, orders: 0 }];
     });
+    const map = new Map(entries);
+    for (const o of inRange) {
+      const entry = map.get((o.created_at ?? "").slice(0, 7));
+      if (entry) { entry.revenue += Number(o.total) || 0; entry.orders += 1; }
+    }
+    series = entries.map(([, v]) => v);
   }
 
   const totalRevenue = series.reduce((a, b) => a + b.revenue, 0);
   const totalOrders = series.reduce((a, b) => a + b.orders, 0);
   const aov = totalOrders ? Math.round(totalRevenue / totalOrders) : 0;
 
-  // Best sellers, categories etc. scale with the range
-  const scale = totalRevenue / 200000;
-  const topProducts = [
-    { name: "Synthetic Oil 5W-30", sold: Math.round(142 * scale), revenue: Math.round(68160 * scale) },
-    { name: "Brake Pad Set — Front", sold: Math.round(38 * scale), revenue: Math.round(81700 * scale) },
-    { name: "Air Filter Universal", sold: Math.round(96 * scale), revenue: Math.round(62400 * scale) },
-    { name: "Spark Plug Iridium", sold: Math.round(210 * scale), revenue: Math.round(67200 * scale) },
-    { name: "Car Wax Premium", sold: Math.round(54 * scale), revenue: Math.round(48060 * scale) },
-  ].sort((a, b) => b.revenue - a.revenue);
-
-  const categories = [
-    { name: "Lubricants", value: Math.round(totalRevenue * 0.28) },
-    { name: "Brakes", value: Math.round(totalRevenue * 0.22) },
-    { name: "Electrical", value: Math.round(totalRevenue * 0.18) },
-    { name: "Filters", value: Math.round(totalRevenue * 0.14) },
-    { name: "Detailing", value: Math.round(totalRevenue * 0.10) },
-    { name: "Other", value: Math.round(totalRevenue * 0.08) },
-  ];
-
-  const serviceRevenue = Math.round(totalRevenue * 0.34);
-  const installRevenue = Math.round(totalRevenue * 0.21);
-  const newCustomers = Math.max(1, Math.round(totalOrders * 0.18));
-  const inventoryUnits = Math.round(totalOrders * 1.6);
-
   // Growth: compare first half vs second half of series
   const mid = Math.floor(series.length / 2);
-  const firstHalf = series.slice(0, mid).reduce((a, b) => a + b.revenue, 0) || 1;
+  const firstHalf = series.slice(0, mid).reduce((a, b) => a + b.revenue, 0);
   const secondHalf = series.slice(mid).reduce((a, b) => a + b.revenue, 0);
-  const growth = ((secondHalf - firstHalf) / firstHalf) * 100;
+  const growth = firstHalf > 0 ? ((secondHalf - firstHalf) / firstHalf) * 100 : (secondHalf > 0 ? 100 : 0);
 
-  return { series, bucket, totalRevenue, totalOrders, aov, topProducts, categories, serviceRevenue, installRevenue, newCustomers, inventoryUnits, growth };
+  return { series, bucket, totalRevenue, totalOrders, aov, growth };
+}
+
+function buildProductBreakdown(orderItems: any[], from: Date, to: Date) {
+  const fromKey = format(from, "yyyy-MM-dd");
+  const toKey = format(to, "yyyy-MM-dd");
+  const inRange = (orderItems as any[]).filter((it) => {
+    const o = it.order;
+    return o && o.status !== "cancelled" && inDateRange(o.created_at, fromKey, toKey);
+  });
+
+  const byProduct = new Map<string, { name: string; sold: number; revenue: number }>();
+  const byCategory = new Map<string, number>();
+  let inventoryUnits = 0;
+
+  for (const it of inRange) {
+    const qty = Number(it.quantity) || 0;
+    const rev = Number(it.line_total) || 0;
+    inventoryUnits += qty;
+
+    const pKey = it.product_id ?? it.name;
+    const cur = byProduct.get(pKey) ?? { name: it.name, sold: 0, revenue: 0 };
+    cur.sold += qty;
+    cur.revenue += rev;
+    byProduct.set(pKey, cur);
+
+    const catName = it.is_service ? "Services" : (it.product?.category?.name ?? "Uncategorized");
+    byCategory.set(catName, (byCategory.get(catName) ?? 0) + rev);
+  }
+
+  const topProducts = [...byProduct.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  const categories = [...byCategory.entries()]
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6);
+
+  return { topProducts, categories, inventoryUnits };
+}
+
+function buildAnalytics(orders: any[], orderItems: any[], jobs: any[], customers: any[], from: Date, to: Date) {
+  const fromKey = format(from, "yyyy-MM-dd");
+  const toKey = format(to, "yyyy-MM-dd");
+
+  const revenue = buildRevenueSeries(orders, from, to);
+  const breakdown = buildProductBreakdown(orderItems, from, to);
+
+  const jobsInRange = (jobs as any[]).filter((j) => inDateRange(j.created_at, fromKey, toKey));
+  const serviceRevenue = jobsInRange.reduce((a, j) => a + (Number(j.labor_cost) || 0), 0);
+  const installRevenue = jobsInRange.reduce((a, j) => a + (Number(j.parts_cost) || 0), 0);
+
+  const newCustomers = (customers as any[]).filter((c) => inDateRange(c.created_at, fromKey, toKey)).length;
+
+  return { ...revenue, ...breakdown, serviceRevenue, installRevenue, newCustomers };
 }
 
 const PIE_COLORS = [
@@ -137,16 +180,18 @@ const PIE_COLORS = [
 function Analytics() {
   const [preset, setPreset] = useState<PresetKey>("7d");
   const [custom, setCustom] = useState<DateRange | undefined>();
-  const [loading, setLoading] = useState(false);
+
+  const { data: orders = [], isLoading: ordersLoading } = useOrders();
+  const { data: orderItems = [], isLoading: itemsLoading } = useAllOrderItems();
+  const { data: jobs = [] } = useJobOrders();
+  const { data: customers = [] } = useCustomers();
+  const loading = ordersLoading || itemsLoading;
 
   const range = useMemo(() => rangeForPreset(preset, custom), [preset, custom]);
-  const data = useMemo(() => generateSeries(range.from, range.to), [range.from, range.to]);
-
-  useEffect(() => {
-    setLoading(true);
-    const t = setTimeout(() => setLoading(false), 280);
-    return () => clearTimeout(t);
-  }, [preset, custom?.from, custom?.to]);
+  const data = useMemo(
+    () => buildAnalytics(orders, orderItems, jobs, customers, range.from, range.to),
+    [orders, orderItems, jobs, customers, range.from, range.to],
+  );
 
   const rangeLabel = differenceInDays(range.to, range.from) === 0
     ? format(range.from, "MMM d, yyyy")
@@ -224,7 +269,7 @@ function Analytics() {
           <Card title="Revenue Trend" subtitle={`Bucketed by ${data.bucket}`}>
             {loading ? (
               <Skeleton className="h-[320px] w-full rounded-xl" />
-            ) : data.series.length === 0 ? (
+            ) : data.totalRevenue === 0 ? (
               <EmptyState />
             ) : (
               <div className="h-[320px]">

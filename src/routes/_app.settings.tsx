@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
 import logo from "@/assets/adz-logo.png";
-import { useBranches, useWarehouses, useBrands, useCategories, useServices, useInsert, useDelete, useIsOwner } from "@/lib/db";
-import { useState } from "react";
-import { Plus, Trash2, Store, Warehouse, Tag, Layers, Wrench } from "lucide-react";
+import { useBranches, useWarehouses, useBrands, useCategories, useServices, useInsert, useDelete, useIsOwner, useCompanySettings, useUpsert } from "@/lib/db";
+import { useState, useEffect } from "react";
+import { Plus, Trash2, Store, Warehouse, Tag, Layers, Wrench, Save } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/settings")({ component: Settings });
@@ -14,6 +14,8 @@ function Settings() {
   const { data: brands = [] } = useBrands();
   const { data: categories = [] } = useCategories();
   const { data: services = [] } = useServices();
+  const { data: companySettings = [] } = useCompanySettings();
+  const saveSettings = useUpsert<any>("company_settings");
   const addBranch = useInsert("branches");
   const canEdit = useIsOwner();
   const delBranch = useDelete("branches");
@@ -25,6 +27,33 @@ function Settings() {
   const delCat = useDelete("categories");
   const addSvc = useInsert("services");
   const delSvc = useDelete("services");
+
+  const settingsRow = (companySettings as any[])[0];
+  const [workspace, setWorkspace] = useState({ company_name: "ADZ Garage", currency: "PHP", vat_rate: "12", receipt_footer: "Thank you for your business!" });
+  useEffect(() => {
+    if (settingsRow) {
+      setWorkspace({
+        company_name: settingsRow.company_name ?? "ADZ Garage",
+        currency: settingsRow.currency ?? "PHP",
+        vat_rate: String(settingsRow.vat_rate ?? "12"),
+        receipt_footer: settingsRow.receipt_footer ?? "Thank you for your business!",
+      });
+    }
+  }, [settingsRow?.id]);
+
+  const saveWorkspace = () => {
+    saveSettings.mutate(
+      {
+        ...(settingsRow?.id ? { id: settingsRow.id } : {}),
+        company_name: workspace.company_name,
+        currency: workspace.currency,
+        vat_rate: Number(workspace.vat_rate) || 0,
+        receipt_footer: workspace.receipt_footer,
+        is_singleton: true,
+      },
+      { onSuccess: () => toast.success("Workspace settings saved") },
+    );
+  };
 
   const [newBranch, setNewBranch] = useState({ name: "", address: "", phone: "" });
   const [newWh, setNewWh] = useState({ name: "", branch_id: "" });
@@ -48,12 +77,48 @@ function Settings() {
             </div>
           </div>
           <div className="grid sm:grid-cols-2 gap-3 mt-6">
-            {["Store Name", "Currency", "VAT %", "Receipt Footer"].map((f) => (
-              <div key={f}>
-                <label className="text-xs font-medium text-muted-foreground">{f}</label>
-                <input className="mt-1 h-10 w-full rounded-lg border border-border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring" defaultValue={f === "Store Name" ? "ADZ Garage" : f === "Currency" ? "PHP" : f === "VAT %" ? "12" : "Thank you for your business!"} />
-              </div>
-            ))}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Store Name</label>
+              <input
+                className="mt-1 h-10 w-full rounded-lg border border-border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                value={workspace.company_name}
+                onChange={(e) => setWorkspace({ ...workspace, company_name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Currency</label>
+              <input
+                className="mt-1 h-10 w-full rounded-lg border border-border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                value={workspace.currency}
+                onChange={(e) => setWorkspace({ ...workspace, currency: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">VAT %</label>
+              <input
+                type="number"
+                className="mt-1 h-10 w-full rounded-lg border border-border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                value={workspace.vat_rate}
+                onChange={(e) => setWorkspace({ ...workspace, vat_rate: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Receipt Footer</label>
+              <input
+                className="mt-1 h-10 w-full rounded-lg border border-border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                value={workspace.receipt_footer}
+                onChange={(e) => setWorkspace({ ...workspace, receipt_footer: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={saveWorkspace}
+              disabled={saveSettings.isPending}
+              className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" /> {saveSettings.isPending ? "Saving…" : "Save Changes"}
+            </button>
           </div>
         </div>
         <div className="rounded-2xl bg-gradient-surface border border-border shadow-soft p-6">

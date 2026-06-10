@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
 import { useMemo, useState } from "react";
-import { Plus, Search, Edit2, Trash2, Wrench } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Wrench, History, ArrowRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useJobOrders, useCustomers, useVehicles, useInsert, useUpdate, useDelete, peso, useIsOwner } from "@/lib/db";
+import { useJobOrders, useCustomers, useVehicles, useInsert, useUpdate, useDelete, useJobOrderHistory, peso, useIsOwner } from "@/lib/db";
 import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
 
 export const Route = createFileRoute("/_app/job-orders")({ component: JobOrdersPage });
 
@@ -29,6 +30,7 @@ function JobOrdersPage() {
   const [filter, setFilter] = useState<string>("all");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
+  const [historyJob, setHistoryJob] = useState<any | null>(null);
 
   const filtered = useMemo(() => jobs.filter((j: any) =>
     (filter === "all" || j.status === filter) &&
@@ -83,6 +85,7 @@ function JobOrdersPage() {
                 </td>
                 <td className="px-6 py-3 text-right font-semibold">{peso(Number(j.total))}</td>
                 <td className="px-6 py-3 text-right">
+                  <button onClick={() => setHistoryJob(j)} title="Status history" className="h-7 w-7 rounded inline-flex items-center justify-center hover:bg-secondary"><History className="h-3.5 w-3.5" /></button>
                   <button disabled={!canEdit} onClick={() => { setEditing(j); setOpen(true); }} className="h-7 w-7 rounded inline-flex items-center justify-center hover:bg-secondary"><Edit2 className="h-3.5 w-3.5" /></button>
                   <button disabled={!canEdit} onClick={() => { if (confirm("Delete?")) del.mutate(j.id); }} className="h-7 w-7 rounded inline-flex items-center justify-center text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /></button>
                 </td>
@@ -98,7 +101,49 @@ function JobOrdersPage() {
           else await ins.mutateAsync({ ...v, job_number: `JO-${Date.now().toString().slice(-8)}` });
           toast.success("Saved"); setOpen(false);
         }} />
+
+      <JobHistoryDialog job={historyJob} onClose={() => setHistoryJob(null)} />
     </PageShell>
+  );
+}
+
+function JobHistoryDialog({ job, onClose }: { job: any | null; onClose: () => void }) {
+  const { data: history = [], isLoading } = useJobOrderHistory(job?.id);
+  return (
+    <Dialog open={!!job} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <History className="h-4 w-4 text-primary" />
+            Status history · {job?.job_number}
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground -mt-2">
+          Who moved this job between statuses and when — for owner verification of mechanic/staff updates.
+        </p>
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {isLoading ? (
+            <div className="text-center py-8 text-sm text-muted-foreground">Loading…</div>
+          ) : history.length === 0 ? (
+            <div className="text-center py-8 text-sm text-muted-foreground">No status changes recorded yet.</div>
+          ) : history.map((h: any) => (
+            <div key={h.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm">
+              <div className="flex items-center gap-2 min-w-0">
+                {h.from_status && (
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${STATUS_COLORS[h.from_status] ?? ""}`}>{h.from_status.replace("_", " ")}</span>
+                )}
+                {h.from_status && <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${STATUS_COLORS[h.to_status] ?? ""}`}>{h.to_status.replace("_", " ")}</span>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-xs font-medium">{h.changed_by_profile?.display_name ?? "System"}</div>
+                <div className="text-[11px] text-muted-foreground">{formatDistanceToNow(new Date(h.created_at), { addSuffix: true })}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

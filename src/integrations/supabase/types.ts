@@ -870,6 +870,8 @@ export type Database = {
           birth_date: string | null
           branch_id: string | null
           civil_status: Database["public"]["Enums"]["civil_status"] | null
+          commission_rate: number
+          commission_type: Database["public"]["Enums"]["commission_type"]
           created_at: string
           daily_rate: number
           date_hired: string
@@ -911,6 +913,8 @@ export type Database = {
           birth_date?: string | null
           branch_id?: string | null
           civil_status?: Database["public"]["Enums"]["civil_status"] | null
+          commission_rate?: number
+          commission_type?: Database["public"]["Enums"]["commission_type"]
           created_at?: string
           daily_rate?: number
           date_hired?: string
@@ -952,6 +956,8 @@ export type Database = {
           birth_date?: string | null
           branch_id?: string | null
           civil_status?: Database["public"]["Enums"]["civil_status"] | null
+          commission_rate?: number
+          commission_type?: Database["public"]["Enums"]["commission_type"]
           created_at?: string
           daily_rate?: number
           date_hired?: string
@@ -1222,6 +1228,7 @@ export type Database = {
       }
       inventory_levels: {
         Row: {
+          expiry_date: string | null
           id: string
           product_id: string
           quantity: number
@@ -1232,6 +1239,7 @@ export type Database = {
           warehouse_id: string
         }
         Insert: {
+          expiry_date?: string | null
           id?: string
           product_id: string
           quantity?: number
@@ -1242,6 +1250,7 @@ export type Database = {
           warehouse_id: string
         }
         Update: {
+          expiry_date?: string | null
           id?: string
           product_id?: string
           quantity?: number
@@ -2012,6 +2021,7 @@ export type Database = {
           created_at: string
           customer_id: string | null
           discount: number
+          fulfillment_type: Database["public"]["Enums"]["fulfillment_type"]
           id: string
           notes: string | null
           order_number: string
@@ -2030,6 +2040,7 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           discount?: number
+          fulfillment_type?: Database["public"]["Enums"]["fulfillment_type"]
           id?: string
           notes?: string | null
           order_number: string
@@ -2048,6 +2059,7 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           discount?: number
+          fulfillment_type?: Database["public"]["Enums"]["fulfillment_type"]
           id?: string
           notes?: string | null
           order_number?: string
@@ -2185,6 +2197,7 @@ export type Database = {
         Row: {
           allowance: number
           basic_pay: number
+          commission: number
           created_at: string
           days_worked: number
           employee_id: string
@@ -2213,6 +2226,7 @@ export type Database = {
         Insert: {
           allowance?: number
           basic_pay?: number
+          commission?: number
           created_at?: string
           days_worked?: number
           employee_id: string
@@ -2241,6 +2255,7 @@ export type Database = {
         Update: {
           allowance?: number
           basic_pay?: number
+          commission?: number
           created_at?: string
           days_worked?: number
           employee_id?: string
@@ -2873,6 +2888,62 @@ export type Database = {
           },
         ]
       }
+      recurring_bills: {
+        Row: {
+          amount: number
+          branch_id: string | null
+          category: string
+          created_at: string
+          created_by: string | null
+          frequency: Database["public"]["Enums"]["bill_frequency"]
+          id: string
+          is_active: boolean
+          method: Database["public"]["Enums"]["payment_method"] | null
+          name: string
+          next_due_date: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          branch_id?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          frequency?: Database["public"]["Enums"]["bill_frequency"]
+          id?: string
+          is_active?: boolean
+          method?: Database["public"]["Enums"]["payment_method"] | null
+          name: string
+          next_due_date: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          branch_id?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          frequency?: Database["public"]["Enums"]["bill_frequency"]
+          id?: string
+          is_active?: boolean
+          method?: Database["public"]["Enums"]["payment_method"] | null
+          name?: string
+          next_due_date?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_bills_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recognitions: {
         Row: {
           awarded_at: string
@@ -3445,6 +3516,8 @@ export type Database = {
           description: string | null
           id: string
           mileage: number | null
+          next_service_date: string | null
+          next_service_mileage: number | null
           service_date: string
           title: string
           vehicle_id: string
@@ -3456,6 +3529,8 @@ export type Database = {
           description?: string | null
           id?: string
           mileage?: number | null
+          next_service_date?: string | null
+          next_service_mileage?: number | null
           service_date?: string
           title: string
           vehicle_id: string
@@ -3467,6 +3542,8 @@ export type Database = {
           description?: string | null
           id?: string
           mileage?: number | null
+          next_service_date?: string | null
+          next_service_mileage?: number | null
           service_date?: string
           title?: string
           vehicle_id?: string
@@ -3628,6 +3705,7 @@ export type Database = {
         | "half_day"
         | "on_leave"
         | "holiday"
+      bill_frequency: "weekly" | "monthly" | "quarterly" | "annually"
       booking_status:
         | "scheduled"
         | "confirmed"
@@ -3636,6 +3714,7 @@ export type Database = {
         | "cancelled"
         | "no_show"
       civil_status: "single" | "married" | "widowed" | "separated" | "divorced"
+      commission_type: "percentage" | "fixed"
       contract_status: "draft" | "active" | "expired" | "terminated"
       document_type:
         | "contract"
@@ -3667,6 +3746,7 @@ export type Database = {
         | "completed"
         | "failed"
         | "dropped"
+      fulfillment_type: "takeout" | "shipping" | "installation"
       feedback_sentiment: "positive" | "neutral" | "negative"
       feedback_source:
         | "in_store"
@@ -3898,6 +3978,7 @@ export const Constants = {
         "on_leave",
         "holiday",
       ],
+      bill_frequency: ["weekly", "monthly", "quarterly", "annually"],
       booking_status: [
         "scheduled",
         "confirmed",
@@ -3907,6 +3988,7 @@ export const Constants = {
         "no_show",
       ],
       civil_status: ["single", "married", "widowed", "separated", "divorced"],
+      commission_type: ["percentage", "fixed"],
       contract_status: ["draft", "active", "expired", "terminated"],
       document_type: [
         "contract",
@@ -3942,6 +4024,7 @@ export const Constants = {
         "failed",
         "dropped",
       ],
+      fulfillment_type: ["takeout", "shipping", "installation"],
       feedback_sentiment: ["positive", "neutral", "negative"],
       feedback_source: [
         "in_store",

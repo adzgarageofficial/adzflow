@@ -1,13 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Search, Edit2, Trash2, ArrowRight, Printer, ShoppingCart, X } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, ArrowRight, Printer, ShoppingCart, X, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useQuotations, useCustomers, useVehicles, useProducts, useServices, useInsert, useUpdate, useDelete, peso, useIsOwner } from "@/lib/db";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { downloadElementAsPdf } from "@/lib/pdf";
 
 export const Route = createFileRoute("/_app/quotations")({ component: QuotationsPage });
 
@@ -73,7 +74,7 @@ function QuotationsPage() {
     const payload = {
       cart,
       customerId: quote.customer_id || "",
-      discountPct: quote.subtotal > 0 ? Math.round((Number(quote.discount) / Number(quote.subtotal)) * 100) : 0,
+      discountAmount: Number(quote.discount || 0),
       label: quote.quotation_number,
     };
     localStorage.setItem("pos.preload", JSON.stringify(payload));
@@ -312,9 +313,17 @@ function PrintDialog({ quote, onClose }: any) {
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between print:hidden">
             <span>Quotation Preview</span>
-            <button onClick={() => window.print()} className="h-9 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold inline-flex items-center gap-1.5">
-              <Printer className="h-3.5 w-3.5" />Print
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => downloadElementAsPdf(document.getElementById("printable-quote"), `Quotation-${quote.quotation_number}`)}
+                className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary"
+              >
+                <Download className="h-3.5 w-3.5" />PDF
+              </button>
+              <button onClick={() => window.print()} className="h-9 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold inline-flex items-center gap-1.5">
+                <Printer className="h-3.5 w-3.5" />Print
+              </button>
+            </div>
           </DialogTitle>
         </DialogHeader>
         <div id="printable-quote" className="p-6 bg-white text-black">

@@ -1,13 +1,19 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
-import { useOrders, useOrderItems, peso, useUpdate, useIsOwner } from "@/lib/db";
+import { useOrders, useOrderItems, useOrderPayments, peso, useUpdate, useIsOwner } from "@/lib/db";
 import { useState } from "react";
-import { Search, Eye, X, CreditCard } from "lucide-react";
+import { Search, Eye, X, CreditCard, ShoppingBag, Truck, Wrench } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/orders")({ component: Orders });
+
+const FULFILLMENT_META: Record<string, { label: string; icon: any; cls: string }> = {
+  takeout: { label: "Takeout", icon: ShoppingBag, cls: "text-zinc-600 bg-zinc-50 border-zinc-200" },
+  shipping: { label: "Shipping", icon: Truck, cls: "text-blue-700 bg-blue-50 border-blue-200" },
+  installation: { label: "Ikakabit", icon: Wrench, cls: "text-amber-700 bg-amber-50 border-amber-200" },
+};
 
 const STATUS_COLORS: Record<string, string> = {
   paid: "bg-emerald-50 text-emerald-700 border-emerald-100",
@@ -44,7 +50,7 @@ function Orders() {
       JSON.stringify({
         cart,
         customerId: o.customer_id ?? "",
-        discountPct: Number(o.subtotal) > 0 ? (Number(o.discount) / Number(o.subtotal)) * 100 : 0,
+        discountAmount: Number(o.discount || 0),
         label: `${o.order_number} (pending payment)`,
         pendingOrderId: o.id,
         notes: o.notes ?? "",
@@ -79,7 +85,7 @@ function Orders() {
             <tr>
               <th className="text-left font-medium px-6 py-3">Order</th>
               <th className="text-left font-medium px-6 py-3">Customer</th>
-              <th className="text-left font-medium px-6 py-3">Channel</th>
+              <th className="text-left font-medium px-6 py-3">Type</th>
               <th className="text-left font-medium px-6 py-3">Status</th>
               <th className="text-left font-medium px-6 py-3">Date</th>
               <th className="text-right font-medium px-6 py-3">Total</th>
@@ -95,7 +101,17 @@ function Orders() {
               <tr key={o.id} className="border-t border-border hover:bg-secondary/40">
                 <td className="px-6 py-4 font-medium">{o.order_number}</td>
                 <td className="px-6 py-4">{o.customer?.full_name ?? <span className="text-muted-foreground">Walk-in</span>}</td>
-                <td className="px-6 py-4 text-muted-foreground uppercase text-xs">{o.channel}</td>
+                <td className="px-6 py-4">
+                  {(() => {
+                    const ft = FULFILLMENT_META[o.fulfillment_type ?? "takeout"] ?? FULFILLMENT_META.takeout;
+                    const Icon = ft.icon;
+                    return (
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${ft.cls}`}>
+                        <Icon className="h-3 w-3" />{ft.label}
+                      </span>
+                    );
+                  })()}
+                </td>
                 <td className="px-6 py-4">
                   <span className={`inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full border ${STATUS_COLORS[o.status] ?? "bg-secondary"}`}>
                     {o.status}
@@ -150,6 +166,7 @@ function Orders() {
 
 function OrderDialog({ orderId, order, onClose, onCancel }: { orderId: string | null; order: any; onClose: () => void; onCancel: () => void }) {
   const { data: items = [] } = useOrderItems(orderId ?? undefined);
+  const { data: payments = [] } = useOrderPayments(orderId ?? undefined);
   return (
     <Dialog open={!!orderId} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl">
@@ -159,6 +176,7 @@ function OrderDialog({ orderId, order, onClose, onCancel }: { orderId: string | 
             <div className="grid grid-cols-3 gap-3 text-sm">
               <Info label="Customer" value={order.customer?.full_name ?? "Walk-in"} />
               <Info label="Status" value={order.status} />
+              <Info label="Type" value={FULFILLMENT_META[order.fulfillment_type ?? "takeout"]?.label ?? "Takeout"} />
               <Info label="Total" value={peso(Number(order.total))} />
               <Info label="Subtotal" value={peso(Number(order.subtotal))} />
               <Info label="Tax" value={peso(Number(order.tax))} />
@@ -181,6 +199,25 @@ function OrderDialog({ orderId, order, onClose, onCancel }: { orderId: string | 
                 </tbody>
               </table>
             </div>
+            {payments.length > 0 && (
+              <div className="rounded-xl border border-border overflow-hidden">
+                <div className="px-4 py-2 bg-secondary/60 text-xs font-semibold uppercase tracking-wider">Payments</div>
+                <div className="divide-y divide-border">
+                  {payments.map((p: any) => (
+                    <div key={p.id} className="px-4 py-2.5 flex items-center justify-between gap-3 text-sm">
+                      <div className="min-w-0">
+                        <div className="font-medium capitalize">{String(p.method).replace("_", " ")}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(p.paid_at).toLocaleString()}
+                          {p.reference && <> · Ref: <span className="font-mono">{p.reference}</span></>}
+                        </div>
+                      </div>
+                      <div className="font-semibold shrink-0">{peso(Number(p.amount))}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {order.status !== "cancelled" && order.status !== "refunded" && (
               <div className="flex justify-end">
                 <button onClick={onCancel} className="h-9 px-4 rounded-xl border border-rose-200 text-rose-700 text-xs font-semibold hover:bg-rose-50 inline-flex items-center gap-1.5">

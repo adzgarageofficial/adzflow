@@ -9,12 +9,14 @@ export interface PayrollInput {
   overtimeHours: number;
   lateMinutes: number;
   hourlyRate?: number; // optional override
+  commission?: number; // pre-computed mechanic commission for the period (already in pesos)
 }
 
 export interface PayrollBreakdown {
   basicPay: number;
   allowance: number;
   overtimePay: number;
+  commission: number;
   lateDeduction: number;
   grossPay: number;
   sss: number;
@@ -72,8 +74,9 @@ export function computePayroll(input: PayrollInput): PayrollBreakdown {
     input.basicMonthly / 176;
   const overtimePay = Math.round(input.overtimeHours * hourly * 1.25 * 100) / 100;
   const lateDeduction = Math.round((input.lateMinutes / 60) * hourly * 100) / 100;
+  const commission = Math.round((input.commission ?? 0) * 100) / 100;
 
-  const grossPay = Math.round((basicPay + allowance + overtimePay) * 100) / 100;
+  const grossPay = Math.round((basicPay + allowance + overtimePay + commission) * 100) / 100;
 
   // Gov contributions: monthly amount split in half (apply on 2nd cutoff typically,
   // but for simplicity split evenly across both cutoffs)
@@ -92,6 +95,7 @@ export function computePayroll(input: PayrollInput): PayrollBreakdown {
     basicPay,
     allowance,
     overtimePay,
+    commission,
     lateDeduction,
     grossPay,
     sss,

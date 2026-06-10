@@ -1,13 +1,35 @@
-import { Search, Bell, Wifi, WifiOff, Command, Plus, Sun, Moon } from "lucide-react";
+import { Search, Bell, Wifi, WifiOff, Command, Plus, Sun, Moon, Info, CheckCircle2, AlertTriangle, AlertCircle, Check } from "lucide-react";
 import { useState, useEffect } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { MobileNavTrigger } from "@/components/mobile-nav";
+import { GlobalSearch } from "@/components/global-search";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useNotifications, useUpdate } from "@/lib/db";
+import { formatDistanceToNow } from "date-fns";
+
+const SEVERITY_META: Record<string, { color: string; Icon: any }> = {
+  info: { color: "text-blue-500", Icon: Info },
+  success: { color: "text-emerald-500", Icon: CheckCircle2 },
+  warning: { color: "text-amber-500", Icon: AlertTriangle },
+  error: { color: "text-rose-500", Icon: AlertCircle },
+};
 
 export function Topbar({ title, subtitle }: { title: string; subtitle?: string }) {
   const [online, setOnline] = useState(true);
+  const [searchOpen, setSearchOpen] = useState(false);
   const { theme, toggle } = useTheme();
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   useEffect(() => {
     const on = () => setOnline(true);
     const off = () => setOnline(false);
@@ -32,16 +54,24 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
         </div>
 
         <div className="ml-auto flex items-center gap-2 md:gap-3">
-          <div className="hidden md:flex items-center gap-2 h-10 w-[320px] rounded-xl border border-border bg-card/60 px-3 shadow-soft">
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="hidden md:flex items-center gap-2 h-10 w-[320px] rounded-xl border border-border bg-card/60 px-3 shadow-soft text-left hover:bg-secondary/60 transition"
+          >
             <Search className="h-4 w-4 text-muted-foreground" />
-            <input
-              placeholder="Search products, orders, customers…"
-              className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
-            />
+            <span className="flex-1 text-sm text-muted-foreground truncate">Search products, orders, customers…</span>
             <kbd className="hidden lg:inline-flex items-center gap-1 text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5">
               <Command className="h-3 w-3" /> K
             </kbd>
-          </div>
+          </button>
+          <button
+            onClick={() => setSearchOpen(true)}
+            aria-label="Search"
+            className="md:hidden h-10 w-10 rounded-xl border border-border bg-card/60 grid place-items-center shadow-soft hover:bg-secondary transition"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+          <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
 
           <span
             className={cn(
@@ -64,10 +94,7 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
 
-          <button className="relative h-10 w-10 rounded-xl border border-border bg-card/60 grid place-items-center shadow-soft hover:bg-secondary transition">
-            <Bell className="h-4 w-4" />
-            <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-primary" />
-          </button>
+          <NotificationBell />
 
           <Link
             to="/pos"
@@ -76,12 +103,88 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
                 window.dispatchEvent(new CustomEvent("pos:new-sale"));
               }
             }}
-            className="hidden md:inline-flex items-center gap-2 h-10 px-3.5 rounded-xl bg-gradient-red text-primary-foreground text-sm font-semibold shadow-glow hover:opacity-95 transition"
+            className="inline-flex items-center gap-2 h-10 px-3.5 rounded-xl bg-gradient-red text-primary-foreground text-sm font-semibold shadow-glow hover:opacity-95 transition"
           >
-            <Plus className="h-4 w-4" /> New Sale
+            <Plus className="h-4 w-4" />
+            <span className="hidden md:inline">New Sale</span>
           </Link>
         </div>
       </div>
     </header>
+  );
+}
+
+function NotificationBell() {
+  const navigate = useNavigate();
+  const { data: notifs = [] } = useNotifications();
+  const update = useUpdate<any>("notifications");
+  const [open, setOpen] = useState(false);
+
+  const list = (notifs as any[]).slice(0, 8);
+  const unreadCount = (notifs as any[]).filter((n) => !n.read_at).length;
+
+  const markRead = (id: string) => update.mutate({ id, patch: { read_at: new Date().toISOString() } });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="relative h-10 w-10 rounded-xl border border-border bg-card/60 grid place-items-center shadow-soft hover:bg-secondary transition">
+          <Bell className="h-4 w-4" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-bold grid place-items-center">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[340px] p-0 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <p className="text-sm font-semibold">Notifications</p>
+          {unreadCount > 0 && (
+            <button
+              onClick={() => {
+                const now = new Date().toISOString();
+                (notifs as any[]).filter((n) => !n.read_at).forEach((n) => update.mutate({ id: n.id, patch: { read_at: now } }));
+              }}
+              className="text-[11px] font-semibold text-primary hover:underline"
+            >
+              Mark all as read
+            </button>
+          )}
+        </div>
+        <div className="max-h-[360px] overflow-y-auto divide-y divide-border">
+          {list.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No notifications yet.</p>
+          ) : (
+            list.map((n) => {
+              const meta = SEVERITY_META[n.severity] ?? SEVERITY_META.info;
+              const Icon = meta.Icon;
+              const unread = !n.read_at;
+              return (
+                <div key={n.id} className={cn("flex items-start gap-2.5 px-4 py-3 text-sm", unread && "bg-primary/5")}>
+                  <Icon className={cn("h-4 w-4 mt-0.5 shrink-0", meta.color)} />
+                  <div className="min-w-0 flex-1">
+                    <p className={cn("truncate", unread && "font-semibold")}>{n.title}</p>
+                    {n.body && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{n.body}</p>}
+                    <p className="text-[10px] text-muted-foreground mt-1">{formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}</p>
+                  </div>
+                  {unread && (
+                    <button onClick={() => markRead(n.id)} title="Mark read" className="h-6 w-6 rounded-lg hover:bg-secondary grid place-items-center shrink-0">
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+        <button
+          onClick={() => { setOpen(false); navigate({ to: "/notifications" }); }}
+          className="w-full text-center text-xs font-semibold text-primary py-2.5 border-t border-border hover:bg-secondary/50 transition"
+        >
+          View all notifications
+        </button>
+      </PopoverContent>
+    </Popover>
   );
 }

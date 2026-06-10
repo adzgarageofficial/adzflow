@@ -1,17 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
 import { useEffect, useMemo, useState } from "react";
-import { useProducts, useCustomers, useBranches, useOrders, peso } from "@/lib/db";
+import {
+  useProducts, useCustomers, useBranches, useOrders, peso,
+  useMyProfile, useCurrentUserRoles, useDiscountApprovals, useInsert, useUpdate, useInventoryLevels,
+} from "@/lib/db";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Search, Plus, Minus, Trash2, Banknote, Smartphone, CreditCard,
   Building2, Link2, Check, Receipt, Pause, FileText, Undo2, PlusCircle, Wrench, Hammer, Package,
-  Wallet, Printer, ScanBarcode, Car,
+  Wallet, Printer, ScanBarcode, Car, Download, ShieldCheck, ShieldAlert, ShieldQuestion, Hourglass, X, CalendarClock, Truck, ShoppingBag,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { downloadElementAsPdf } from "@/lib/pdf";
 
 export const Route = createFileRoute("/_app/pos")({ component: POSPage });
 
@@ -20,7 +24,7 @@ type Suspended = {
   id: string;
   label: string;
   cart: CartItem[];
-  discountPct: number;
+  discountAmount: number;
   customerId: string;
   branchId: string;
   notes?: string;
@@ -44,20 +48,44 @@ const methods = [
   { id: "other", label: "Link", icon: Link2 },
 ] as const;
 
+const FULFILLMENT_TYPES = [
+  { id: "takeout", label: "Takeout", icon: ShoppingBag },
+  { id: "shipping", label: "Shipping", icon: Truck },
+  { id: "installation", label: "Ikakabit", icon: Wrench },
+] as const;
+
+const FULFILLMENT_LABELS: Record<string, string> = {
+  takeout: "For Takeout",
+  shipping: "For Shipping",
+  installation: "For Installation",
+};
+
 function POSPage() {
   const { data: products = [] } = useProducts();
+  const { data: inventoryLevels = [] } = useInventoryLevels();
   const { data: customers = [] } = useCustomers();
   const { data: branches = [] } = useBranches();
   const { data: recentOrders = [] } = useOrders();
+  const { data: myProfile } = useMyProfile();
+  const { data: myRoles = [] } = useCurrentUserRoles();
+  const isApprover = myRoles.includes("owner") || myRoles.includes("admin");
+  const { data: discountApprovalRows = [] } = useDiscountApprovals({ enabled: isApprover, refetchInterval: isApprover ? 15_000 : false });
+  const pendingApprovals = (discountApprovalRows as any[]).filter((r) => r.status === "pending");
+  const decideApproval = useUpdate<any>("discount_approvals");
   const qc = useQueryClient();
 
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [discountPct, setDiscountPct] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountRequestId, setDiscountRequestId] = useState<string | null>(null);
+  const [requestingApproval, setRequestingApproval] = useState(false);
+  const [showApprovals, setShowApprovals] = useState(false);
   const [method, setMethod] = useState<(typeof methods)[number]["id"]>("cash");
+  const [fulfillment, setFulfillment] = useState<"takeout" | "shipping" | "installation">("takeout");
   const [customerId, setCustomerId] = useState<string>("");
   const [branchId, setBranchId] = useState<string>("");
   const [cashReceived, setCashReceived] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
   const [receipt, setReceipt] = useState<any>(null);
   const [processing, setProcessing] = useState(false);
 
@@ -82,13 +110,52 @@ function POSPage() {
   useEffect(() => { saveLS(PARK_KEY, parked); }, [parked]);
   useEffect(() => { saveLS(DRAFT_KEY, drafts); }, [drafts]);
 
-  const filtered = useMemo(
-    () => products.filter((p: any) => !query || p.name?.toLowerCase().includes(query.toLowerCase()) || p.sku?.toLowerCase().includes(query.toLowerCase())),
-    [products, query],
-  );
+  // FIFO/FEFO: earliest expiry/best-by date on hand per product, across all warehouses —
+  // tires age even unsold, so the picker nudges cashiers to move the oldest batch first.
+  const earliestExpiryByProduct = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const lvl of inventoryLevels as any[]) {
+      if (!lvl.expiry_date || lvl.product_id == null) continue;
+      if (!map[lvl.product_id] || lvl.expiry_date < map[lvl.product_id]) map[lvl.product_id] = lvl.expiry_date;
+    }
+    return map;
+  }, [inventoryLevels]);
+
+  const filtered = useMemo(() => {
+    const list = products.filter((p: any) => !query || p.name?.toLowerCase().includes(query.toLowerCase()) || p.sku?.toLowerCase().includes(query.toLowerCase()));
+    if (!Object.keys(earliestExpiryByProduct).length) return list;
+    return [...list].sort((a: any, b: any) => {
+      const ea = earliestExpiryByProduct[a.id];
+      const eb = earliestExpiryByProduct[b.id];
+      if (ea && eb) return ea.localeCompare(eb);
+      if (ea) return -1;
+      if (eb) return 1;
+      return 0;
+    });
+  }, [products, query, earliestExpiryByProduct]);
 
   const subtotal = cart.reduce((s, c) => s + c.price * c.qty, 0);
-  const discount = subtotal * (discountPct / 100);
+  const requestedDiscount = Math.min(Math.max(0, Number(discountAmount) || 0), subtotal);
+
+  // Live status of the cashier's discount-approval request (polls while pending)
+  const { data: discountRequest } = useQuery<any | null>({
+    queryKey: ["discount_approval", discountRequestId],
+    queryFn: async () => {
+      if (!discountRequestId) return null;
+      const { data, error } = await (supabase as any).from("discount_approvals").select("*").eq("id", discountRequestId).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!discountRequestId,
+    refetchInterval: (q) => (q.state.data?.status === "pending" ? 4000 : false),
+  });
+  // A request only counts once its approved amount still matches what's typed now —
+  // editing the discount after approval invalidates it and requires a fresh approval.
+  const approvalCurrent = !!discountRequest && Number(discountRequest.amount) === requestedDiscount && requestedDiscount > 0;
+  const discountApproved = approvalCurrent && discountRequest.status === "approved";
+  const discountPending = approvalCurrent && discountRequest.status === "pending";
+  const discountDenied = approvalCurrent && discountRequest.status === "denied";
+  const discount = discountApproved ? requestedDiscount : 0;
   const tax = 0;
   const total = subtotal - discount;
   const change = Math.max(0, Number(cashReceived || 0) - total);
@@ -102,7 +169,7 @@ function POSPage() {
       if (Array.isArray(p.cart) && p.cart.length) {
         setCart(p.cart);
         if (p.customerId) setCustomerId(p.customerId);
-        if (typeof p.discountPct === "number") setDiscountPct(p.discountPct);
+        if (typeof p.discountAmount === "number") setDiscountAmount(p.discountAmount);
         if (p.pendingOrderId) setPendingOrderId(p.pendingOrderId);
         if (typeof p.notes === "string" && p.notes) {
           // Try to parse "Walk-in: NAME | Vehicle: MAKE | Plate: ABC123"
@@ -137,10 +204,11 @@ function POSPage() {
     setCart((c) => [...c, { id: `custom-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, name, sku, price, qty, custom: true }]);
   }
   function snapshot(label: string, notes?: string): Suspended {
-    return { id: `s-${Date.now()}`, label, cart, discountPct, customerId, branchId, notes, savedAt: Date.now() };
+    return { id: `s-${Date.now()}`, label, cart, discountAmount, customerId, branchId, notes, savedAt: Date.now() };
   }
   function resetSale() {
-    setCart([]); setDiscountPct(0); setCustomerId(""); setBranchId(""); setCashReceived("");
+    setCart([]); setDiscountAmount(0); setDiscountRequestId(null); setCustomerId(""); setBranchId(""); setCashReceived("");
+    setPaymentReference(""); setMethod("cash"); setFulfillment("takeout");
     setWalkInName(""); setWalkInVehicle(""); setWalkInPlate(""); setPendingOrderId(null);
   }
   function parkOrder() {
@@ -152,7 +220,7 @@ function POSPage() {
     toast.success("Order parked");
   }
   function resume(s: Suspended, from: "park" | "draft") {
-    setCart(s.cart); setDiscountPct(s.discountPct);
+    setCart(s.cart); setDiscountAmount(s.discountAmount ?? 0); setDiscountRequestId(null);
     setCustomerId(s.customerId); setBranchId(s.branchId);
     if (from === "park") { setParked((p) => p.filter((x) => x.id !== s.id)); setShowParked(false); }
     else { setDrafts((d) => d.filter((x) => x.id !== s.id)); setShowDrafts(false); }
@@ -168,8 +236,51 @@ function POSPage() {
     toast.success("Draft saved");
   }
 
+  async function requestDiscountApproval() {
+    if (requestedDiscount <= 0) return toast.error("Maglagay muna ng halaga ng discount");
+    setRequestingApproval(true);
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const cust = customers.find((c: any) => c.id === customerId);
+      const label = cust?.full_name || walkInName || "Walk-in customer";
+      const { data: created, error } = await (supabase as any)
+        .from("discount_approvals")
+        .insert({
+          requested_by: userRes.user?.id ?? null,
+          requested_by_name: myProfile?.display_name ?? null,
+          amount: requestedDiscount,
+          subtotal,
+          customer_label: label,
+        })
+        .select().single();
+      if (error) throw error;
+      setDiscountRequestId(created.id);
+      qc.invalidateQueries({ queryKey: ["discount_approvals"] });
+      await supabase.from("notifications").insert({
+        title: "Discount approval needed",
+        body: `${myProfile?.display_name || "Cashier"} is requesting a ${peso(requestedDiscount)} discount for ${label} (subtotal ${peso(subtotal)}).`,
+        severity: "warning",
+        category: "finance",
+        audience_role: "owner",
+        link: "/pos",
+      });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      toast.success("Approval request sent — hintayin ang owner/admin");
+    } catch (e: any) {
+      toast.error(e.message ?? "Hindi naipadala ang request");
+    } finally {
+      setRequestingApproval(false);
+    }
+  }
+
   async function checkout() {
     if (cart.length === 0) return toast.error("Cart is empty");
+    if (requestedDiscount > 0 && !discountApproved) {
+      return toast.error("Kailangan munang aprubahan ng owner/admin ang discount bago mag-checkout");
+    }
+    if (method !== "cash" && !paymentReference.trim()) {
+      return toast.error("Ilagay ang reference number / approval code ng bayad");
+    }
     setProcessing(true);
     try {
       const { data: userRes } = await supabase.auth.getUser();
@@ -196,6 +307,7 @@ function POSPage() {
             subtotal, discount, tax, total,
             amount_paid: status === "paid" ? total : 0,
             notes: walkInNote || null,
+            fulfillment_type: fulfillment,
           })
           .eq("id", pendingOrderId)
           .select().single();
@@ -215,6 +327,7 @@ function POSPage() {
             subtotal, discount, tax, total,
             amount_paid: status === "paid" ? total : 0,
             notes: walkInNote || null,
+            fulfillment_type: fulfillment,
           })
           .select().single();
         if (oerr) throw oerr;
@@ -231,6 +344,7 @@ function POSPage() {
       if (status === "paid") {
         await supabase.from("order_payments").insert({
           order_id: order.id, method, amount: total,
+          reference: method !== "cash" ? paymentReference.trim() : null,
           created_by: userRes.user?.id ?? null,
         });
         // Auto-deduct inventory for paid orders
@@ -246,7 +360,7 @@ function POSPage() {
       setReceipt({
         ...order,
         items: cart.map((c) => ({ name: c.name, quantity: c.qty, line_total: c.price * c.qty })),
-        change, method,
+        change, method, fulfillment,
         walkInName, walkInVehicle, walkInPlate,
         customerName: customers.find((x: any) => x.id === customerId)?.full_name,
       });
@@ -316,6 +430,25 @@ function POSPage() {
     }
   }
 
+  async function decideDiscountApproval(request: any, decision: "approved" | "denied", note: string) {
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      await decideApproval.mutateAsync({
+        id: request.id,
+        patch: {
+          status: decision,
+          decided_by: userRes.user?.id ?? null,
+          decided_by_name: myProfile?.display_name ?? null,
+          decided_at: new Date().toISOString(),
+          decision_note: note || null,
+        },
+      });
+      toast.success(decision === "approved" ? "Discount approved" : "Discount request denied");
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to update request");
+    }
+  }
+
   return (
     <PageShell title="POS" subtitle="Point of sale checkout.">
       {/* Toolbar */}
@@ -332,6 +465,14 @@ function POSPage() {
         <button onClick={() => setShowRefund(true)} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
           <Undo2 className="h-3.5 w-3.5" />Returns & Refunds
         </button>
+        {isApprover && (
+          <button onClick={() => setShowApprovals(true)} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
+            <ShieldCheck className="h-3.5 w-3.5" />Discount Approvals
+            {pendingApprovals.length > 0 && (
+              <span className="inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold">{pendingApprovals.length}</span>
+            )}
+          </button>
+        )}
         <button onClick={() => setShowCustom(true)} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
           <PlusCircle className="h-3.5 w-3.5" />Custom Item
         </button>
@@ -367,7 +508,14 @@ function POSPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[70vh] overflow-y-auto pr-1">
-              {filtered.map((p: any) => (
+              {filtered.map((p: any) => {
+                const oldestStock = earliestExpiryByProduct[p.id];
+                let badgeTone = "bg-secondary text-muted-foreground border-border";
+                if (oldestStock) {
+                  const days = Math.round((new Date(oldestStock).getTime() - Date.now()) / 86400000);
+                  badgeTone = days < 0 ? "bg-rose-50 text-rose-700 border-rose-100" : days <= 60 ? "bg-amber-50 text-amber-700 border-amber-100" : badgeTone;
+                }
+                return (
                 <motion.button
                   key={p.id} whileTap={{ scale: 0.97 }}
                   onClick={() => addToCart(p)}
@@ -378,8 +526,13 @@ function POSPage() {
                   </div>
                   <div className="text-xs font-semibold line-clamp-2">{p.name}</div>
                   <div className="text-sm font-bold mt-1">{peso(Number(p.retail_price ?? p.base_price ?? 0))}</div>
+                  {oldestStock && (
+                    <div className={`mt-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border inline-flex items-center gap-1 ${badgeTone}`} title="Sell this batch first (FIFO/FEFO) — oldest stock on hand">
+                      <CalendarClock className="h-2.5 w-2.5 shrink-0" />Sell first · {new Date(oldestStock).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                    </div>
+                  )}
                 </motion.button>
-              ))}
+              );})}
             </div>
           )}
         </div>
@@ -454,19 +607,68 @@ function POSPage() {
           <div className="space-y-2 text-xs border-t border-border pt-3">
             <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{peso(subtotal)}</span></div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">Discount %</span>
-              <input type="number" min={0} max={100} value={discountPct} onChange={(e) => setDiscountPct(Number(e.target.value) || 0)} className="w-16 h-7 px-2 rounded border border-border text-right" />
+              <span className="text-muted-foreground">Discount ₱</span>
+              <input
+                type="number" min={0} step="0.01" inputMode="decimal"
+                value={discountAmount || ""} placeholder="0.00"
+                onChange={(e) => setDiscountAmount(Math.max(0, Number(e.target.value) || 0))}
+                className="w-24 h-7 px-2 rounded border border-border text-right"
+              />
             </div>
+            {requestedDiscount > 0 && (
+              <div className={`flex items-center justify-between gap-2 rounded-lg border px-2 py-1.5 text-[11px] ${
+                discountApproved ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                : discountDenied ? "bg-rose-50 border-rose-200 text-rose-700"
+                : discountPending ? "bg-amber-50 border-amber-200 text-amber-800"
+                : "bg-secondary/50 border-border text-muted-foreground"
+              }`}>
+                <span className="inline-flex items-center gap-1.5">
+                  {discountApproved && <ShieldCheck className="h-3.5 w-3.5 shrink-0" />}
+                  {discountDenied && <ShieldAlert className="h-3.5 w-3.5 shrink-0" />}
+                  {discountPending && <Hourglass className="h-3.5 w-3.5 shrink-0" />}
+                  {!discountApproved && !discountDenied && !discountPending && <ShieldQuestion className="h-3.5 w-3.5 shrink-0" />}
+                  <span>
+                    {discountApproved && <>Approved by {discountRequest?.decided_by_name || "owner/admin"}</>}
+                    {discountDenied && <>Denied{discountRequest?.decided_by_name ? ` by ${discountRequest.decided_by_name}` : ""}{discountRequest?.decision_note ? ` — ${discountRequest.decision_note}` : ""}</>}
+                    {discountPending && <>Waiting for owner/admin approval…</>}
+                    {!discountApproved && !discountDenied && !discountPending && <>Needs owner/admin approval before checkout</>}
+                  </span>
+                </span>
+                {!discountPending && !discountApproved && (
+                  <button
+                    onClick={requestDiscountApproval} disabled={requestingApproval}
+                    className="h-6 px-2 rounded-md bg-foreground text-background text-[10px] font-semibold disabled:opacity-50 shrink-0"
+                  >
+                    {requestingApproval ? "Sending…" : discountDenied ? "Request again" : "Request approval"}
+                  </button>
+                )}
+              </div>
+            )}
             <div className="flex justify-between text-base font-bold border-t border-border pt-2"><span>Total</span><span>{peso(total)}</span></div>
           </div>
 
-          <div className="grid grid-cols-3 gap-1.5 mt-3">
+          <div className="mt-3">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">Order type</div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {FULFILLMENT_TYPES.map((f) => (
+                <button key={f.id} onClick={() => setFulfillment(f.id as typeof fulfillment)}
+                  className={`h-9 rounded-lg text-[11px] font-semibold inline-flex items-center justify-center gap-1 border transition ${fulfillment === f.id ? "bg-foreground text-background border-foreground" : "border-border hover:bg-secondary"}`}>
+                  <f.icon className="h-3 w-3" />{f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">Payment</div>
+            <div className="grid grid-cols-3 gap-1.5">
             {methods.map((m) => (
               <button key={m.id} onClick={() => setMethod(m.id)}
                 className={`h-9 rounded-lg text-[11px] font-semibold inline-flex items-center justify-center gap-1 border transition ${method === m.id ? "bg-foreground text-background border-foreground" : "border-border hover:bg-secondary"}`}>
                 <m.icon className="h-3 w-3" />{m.label}
               </button>
             ))}
+            </div>
           </div>
 
           {method === "cash" && (
@@ -476,8 +678,18 @@ function POSPage() {
           {method === "cash" && Number(cashReceived) >= total && total > 0 && (
             <div className="text-xs text-emerald-700 mt-1">Change: {peso(change)}</div>
           )}
+          {method !== "cash" && (
+            <div className="mt-2">
+              <input
+                value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)}
+                placeholder={`${methods.find((m) => m.id === method)?.label ?? "Payment"} reference / approval code`}
+                className="w-full h-9 px-3 rounded-lg border border-border text-sm"
+              />
+              <div className="text-[10px] text-muted-foreground mt-1">Itype ang reference no. / approval code mula sa kumpirmasyon ng customer — para ito ang ma-track ng owner.</div>
+            </div>
+          )}
 
-          <button disabled={processing || cart.length === 0} onClick={checkout}
+          <button disabled={processing || cart.length === 0 || (requestedDiscount > 0 && !discountApproved) || (method !== "cash" && !paymentReference.trim())} onClick={checkout}
             className="mt-3 h-11 rounded-xl bg-primary text-primary-foreground font-semibold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50 shadow-soft hover:opacity-95">
             <Check className="h-4 w-4" />{processing ? "Processing..." : `Charge ${peso(total)}`}
           </button>
@@ -506,6 +718,11 @@ function POSPage() {
                   <div className="text-[10px] text-muted-foreground">Official Receipt</div>
                   <div className="text-[11px] mt-1">{receipt.order_number}</div>
                   <div className="text-[10px] text-muted-foreground">{new Date().toLocaleString()}</div>
+                  {receipt.fulfillment && receipt.fulfillment !== "takeout" && (
+                    <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-zinc-100 border border-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-700">
+                      {FULFILLMENT_LABELS[receipt.fulfillment] ?? receipt.fulfillment}
+                    </div>
+                  )}
                 </div>
                 {(receipt.customerName || receipt.walkInName || receipt.walkInVehicle || receipt.walkInPlate) && (
                   <div className="border-t border-dashed border-zinc-300 pt-2 text-[11px] space-y-0.5">
@@ -531,9 +748,15 @@ function POSPage() {
                 </div>
                 <div className="text-center text-[10px] text-zinc-500 pt-2">Salamat sa pagbili!</div>
               </div>
-              <div className="grid grid-cols-2 gap-2 print:hidden">
+              <div className="grid grid-cols-3 gap-2 print:hidden">
                 <button onClick={printReceipt} className="h-10 rounded-xl border border-border text-sm font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-secondary">
                   <Printer className="h-4 w-4" />Print
+                </button>
+                <button
+                  onClick={() => downloadElementAsPdf(document.getElementById("pos-receipt-print"), `Receipt-${receipt.order_number}`)}
+                  className="h-10 rounded-xl border border-border text-sm font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-secondary"
+                >
+                  <Download className="h-4 w-4" />PDF
                 </button>
                 <button onClick={() => setReceipt(null)} className="h-10 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">Done</button>
               </div>
@@ -665,7 +888,79 @@ function POSPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Discount Approvals — owner/admin review cashier requests */}
+      {isApprover && (
+        <Dialog open={showApprovals} onOpenChange={setShowApprovals}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" />Discount Approvals</DialogTitle></DialogHeader>
+            {discountApprovalRows.length === 0 ? (
+              <div className="text-center py-8 text-sm text-muted-foreground">No discount requests yet</div>
+            ) : (
+              <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+                {(discountApprovalRows as any[]).slice(0, 30).map((r) => (
+                  <ApprovalRow key={r.id} request={r} onDecide={decideDiscountApproval} />
+                ))}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </PageShell>
+  );
+}
+
+function ApprovalRow({ request, onDecide }: { request: any; onDecide: (r: any, decision: "approved" | "denied", note: string) => Promise<void> }) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState<"approved" | "denied" | null>(null);
+  const pending = request.status === "pending";
+
+  const decide = async (decision: "approved" | "denied") => {
+    setBusy(decision);
+    await onDecide(request, decision, note);
+    setBusy(null);
+  };
+
+  return (
+    <div className="rounded-lg border border-border p-3 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold truncate">{request.customer_label || "Walk-in customer"}</div>
+          <div className="text-xs text-muted-foreground">Requested by {request.requested_by_name || "cashier"} · {new Date(request.created_at).toLocaleString()}</div>
+        </div>
+        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 capitalize ${
+          request.status === "approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+          : request.status === "denied" ? "bg-rose-50 text-rose-700 border-rose-200"
+          : "bg-amber-50 text-amber-800 border-amber-200"
+        }`}>{request.status}</span>
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Subtotal {peso(Number(request.subtotal))}</span>
+        <span className="font-bold text-rose-600">− {peso(Number(request.amount))}</span>
+      </div>
+      {pending ? (
+        <>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional — e.g. reason for denial)"
+            className="w-full h-8 px-2 rounded border border-border text-xs bg-background" />
+          <div className="grid grid-cols-2 gap-2">
+            <button disabled={!!busy} onClick={() => decide("denied")}
+              className="h-8 rounded-lg border border-rose-200 text-rose-600 text-xs font-semibold hover:bg-rose-50 disabled:opacity-50 inline-flex items-center justify-center gap-1.5">
+              <X className="h-3.5 w-3.5" />{busy === "denied" ? "Denying…" : "Deny"}
+            </button>
+            <button disabled={!!busy} onClick={() => decide("approved")}
+              className="h-8 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-1.5">
+              <Check className="h-3.5 w-3.5" />{busy === "approved" ? "Approving…" : "Approve"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="text-[11px] text-muted-foreground">
+          {request.status === "approved" ? "Approved" : "Denied"} by {request.decided_by_name || "—"}
+          {request.decided_at ? ` · ${new Date(request.decided_at).toLocaleString()}` : ""}
+          {request.decision_note ? ` — "${request.decision_note}"` : ""}
+        </div>
+      )}
+    </div>
   );
 }
 
