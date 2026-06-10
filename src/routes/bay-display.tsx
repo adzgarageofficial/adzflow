@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import adzLogo from "@/assets/adz-logo.png";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -82,10 +83,7 @@ function BayDisplayPage() {
       {/* ── Header ── */}
       <header className="flex items-center justify-between px-8 py-4 border-b border-white/10 bg-gray-900/80 backdrop-blur shrink-0">
         <div className="flex items-center gap-4">
-          {/* Logo badge */}
-          <div className="h-12 w-12 rounded-xl bg-red-600 flex items-center justify-center font-black text-xl tracking-tight select-none">
-            ADZ
-          </div>
+          <img src={adzLogo} alt="ADZ Garage" className="h-12 w-12 rounded-xl object-cover" />
           <div>
             <div className="text-xl font-black tracking-wider text-white leading-none">ADZ GARAGE</div>
             <div className="text-xs text-gray-400 tracking-[0.2em] uppercase mt-0.5">Service Bay Status</div>

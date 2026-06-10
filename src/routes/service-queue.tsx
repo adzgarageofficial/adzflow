@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import adzLogo from "@/assets/adz-logo.png";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -66,7 +67,7 @@ function ServiceQueuePage() {
       <div className="mx-auto w-full max-w-6xl">
         <header className="flex items-center justify-between gap-4 flex-wrap mb-8">
           <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-primary text-primary-foreground grid place-items-center font-bold text-lg">A</div>
+            <img src={adzLogo} alt="ADZ Garage" className="h-12 w-12 rounded-2xl object-cover" />
             <div>
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Service Queue</h1>
               <p className="text-sm text-muted-foreground">ADZ Garage — live status of vehicles being serviced today</p>

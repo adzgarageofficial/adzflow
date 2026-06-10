@@ -3,17 +3,17 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 type Theme = "light" | "dark";
 
 const ThemeCtx = createContext<{ theme: Theme; toggle: () => void; setTheme: (t: Theme) => void }>({
-  theme: "dark",
+  theme: "light",
   toggle: () => {},
   setTheme: () => {},
 });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("dark");
+  const [theme, setThemeState] = useState<Theme>("light");
 
   useEffect(() => {
     const saved = (typeof window !== "undefined" && localStorage.getItem("adz-theme")) as Theme | null;
-    const initial: Theme = saved === "light" || saved === "dark" ? saved : "dark";
+    const initial: Theme = saved === "light" || saved === "dark" ? saved : "light";
     setThemeState(initial);
   }, []);
 

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import adzLogo from "@/assets/adz-logo.png";
 import { useState } from "react";
 import { Search, Droplets, Calendar, Gauge, Car, CalendarPlus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -96,9 +97,7 @@ function OilHistoryPage() {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="mx-auto h-12 w-12 rounded-2xl bg-primary text-primary-foreground grid place-items-center font-extrabold text-lg mb-3">
-            A
-          </div>
+          <img src={adzLogo} alt="ADZ Garage" className="mx-auto h-12 w-12 rounded-2xl object-cover mb-3" />
           <h1 className="text-2xl font-bold tracking-tight">Oil Change History</h1>
           <p className="text-sm text-muted-foreground mt-1">
             I-search ang inyong huling oil change gamit ang surname at plate number.

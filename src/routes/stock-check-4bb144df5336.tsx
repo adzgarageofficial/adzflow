@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import adzLogo from "@/assets/adz-logo.png";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,9 +54,7 @@ function StockCheckPage() {
     <div className="min-h-screen w-full bg-surface px-4 py-10">
       <div className="mx-auto w-full max-w-2xl">
         <div className="text-center mb-6">
-          <div className="mx-auto h-12 w-12 rounded-2xl bg-primary text-primary-foreground grid place-items-center font-bold text-lg">
-            A
-          </div>
+          <img src={adzLogo} alt="ADZ Garage" className="mx-auto h-12 w-12 rounded-2xl object-cover" />
           <h1 className="mt-3 text-2xl font-bold tracking-tight">Stock Check</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Search a part name or SKU to see if it's currently available — for ADZ Garage owner & sales use only.

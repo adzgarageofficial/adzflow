@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import adzLogo from "@/assets/adz-logo.png";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -72,9 +73,7 @@ function LoginPage() {
     <div className="min-h-screen w-full grid place-items-center bg-surface px-4">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-soft p-8">
         <div className="text-center mb-6">
-          <div className="mx-auto h-12 w-12 rounded-2xl bg-primary text-primary-foreground grid place-items-center font-bold text-lg">
-            A
-          </div>
+          <img src={adzLogo} alt="ADZ Garage" className="mx-auto h-12 w-12 rounded-2xl object-cover" />
           <h1 className="mt-3 text-2xl font-bold tracking-tight">ADZ Garage</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === "signin" ? "Sign in to your workspace" : "Create your account"}
