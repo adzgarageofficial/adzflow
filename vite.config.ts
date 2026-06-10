@@ -1,16 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import { nitro } from "nitro/vite";
 
-export default defineConfig(async ({ command }) => ({
+export default defineConfig({
   plugins: [
     tailwindcss(),
     tsConfigPaths({ projects: ["./tsconfig.json"] }),
     tanstackStart({
-      server: { entry: "server" },
       importProtection: {
         behavior: "error",
         client: {
@@ -19,10 +18,8 @@ export default defineConfig(async ({ command }) => ({
         },
       },
     }),
+    nitro({ preset: "vercel" }),
     react(),
-    ...(command === "build"
-      ? [cloudflare({ viteEnvironment: { name: "ssr" } })]
-      : []),
   ],
   resolve: {
     alias: { "@": `${process.cwd()}/src` },
@@ -36,4 +33,4 @@ export default defineConfig(async ({ command }) => ({
     ],
   },
   server: { host: "::", port: 8080 },
-}));
+});

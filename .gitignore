@@ -1,3 +1,8 @@
+# Environment variables (set in Vercel dashboard for production)
+.env
+.env.*
+!.env.example
+
 # Logs
 logs
 *.log
@@ -16,9 +21,12 @@ dist-ssr
 .nitro
 *.local
 
-# Wrangler / Cloudflare
+# Wrangler / Cloudflare (kept for reference, not used for Vercel deployment)
 .wrangler/
 .dev.vars
+
+# Vercel build output
+.vercel/output/
 
 # Editor directories and files
 .vscode/*
