@@ -9,12 +9,13 @@ import {
   type ModuleKey,
   type ActionKey,
 } from "@/lib/rbac";
+import { useCurrentUserRoles } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { ShieldCheck, Copy, Plus, Trash2, ShieldOff } from "lucide-react";
+import { ShieldCheck, Copy, Plus, Trash2, ShieldOff, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -22,7 +23,18 @@ export const Route = createFileRoute("/_app/roles")({ component: RolesPage });
 
 function RolesPage() {
   const { roles, users, setRoles, can } = useRbac();
+  const { isLoading: rolesLoading } = useCurrentUserRoles();
   const [selectedId, setSelectedId] = useState<string>(roles[0]?.id ?? "");
+
+  if (rolesLoading) {
+    return (
+      <PageShell title="Roles & Permissions" subtitle="Loading permissions…">
+        <div className="rounded-2xl border border-border bg-card p-10 text-center shadow-soft">
+          <Loader2 className="h-8 w-8 text-muted-foreground mx-auto animate-spin" />
+        </div>
+      </PageShell>
+    );
+  }
 
   if (!can("roles", "view")) {
     return (
@@ -87,6 +99,7 @@ function RolesPage() {
     };
     setRoles([...roles, r]);
     setSelectedId(r.id);
+    toast.success("Role created — edit the name and permissions below.");
   };
 
   return (

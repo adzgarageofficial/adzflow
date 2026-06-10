@@ -1,5 +1,5 @@
 // PH Payroll Calculations (semi-monthly cutoff)
-// References: SSS 2024, PhilHealth 5% (2024), Pag-IBIG 2%, BIR Train Law 2023+
+// References: SSS 2024, PhilHealth 5% (2024), Pag-IBIG 2%
 
 export interface PayrollInput {
   basicMonthly: number;
@@ -22,7 +22,6 @@ export interface PayrollBreakdown {
   sss: number;
   philhealth: number;
   pagibig: number;
-  withholdingTax: number;
   totalDeductions: number;
   netPay: number;
 }
@@ -46,15 +45,6 @@ function pagibigMonthly(monthlySalary: number): number {
   return Math.round(base * 0.02 * 100) / 100;
 }
 
-// BIR Withholding — semi-monthly compensation table (TRAIN Law, 2023+)
-function withholdingTaxSemiMonthly(taxable: number): number {
-  if (taxable <= 10417) return 0;
-  if (taxable <= 16667) return (taxable - 10417) * 0.15;
-  if (taxable <= 33333) return 937.5 + (taxable - 16667) * 0.2;
-  if (taxable <= 83333) return 4270.7 + (taxable - 33333) * 0.25;
-  if (taxable <= 333333) return 16770.7 + (taxable - 83333) * 0.3;
-  return 91770.7 + (taxable - 333333) * 0.35;
-}
 
 export function computePayroll(input: PayrollInput): PayrollBreakdown {
   const basicSemi = input.basicMonthly / 2;
@@ -84,11 +74,8 @@ export function computePayroll(input: PayrollInput): PayrollBreakdown {
   const philhealth = Math.round((philhealthMonthly(input.basicMonthly) / 2) * 100) / 100;
   const pagibig = Math.round((pagibigMonthly(input.basicMonthly) / 2) * 100) / 100;
 
-  const taxable = Math.max(0, grossPay - sss - philhealth - pagibig);
-  const withholdingTax = Math.round(withholdingTaxSemiMonthly(taxable) * 100) / 100;
-
   const totalDeductions =
-    Math.round((sss + philhealth + pagibig + withholdingTax + lateDeduction) * 100) / 100;
+    Math.round((sss + philhealth + pagibig + lateDeduction) * 100) / 100;
   const netPay = Math.round((grossPay - totalDeductions) * 100) / 100;
 
   return {
@@ -101,7 +88,6 @@ export function computePayroll(input: PayrollInput): PayrollBreakdown {
     sss,
     philhealth,
     pagibig,
-    withholdingTax,
     totalDeductions,
     netPay,
   };

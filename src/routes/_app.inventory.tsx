@@ -9,12 +9,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Boxes, AlertTriangle, Layers, Search, Plus,
-  Archive, TrendingUp, Edit2, Trash2, Wallet,
+  Archive, TrendingUp, Edit2, Trash2, Wallet, Download,
 } from "lucide-react";
+import { downloadExcel } from "@/lib/export-excel";
+import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/inventory")({ component: Inventory });
+
+function fuzzyMatch(haystack: string, query: string): boolean {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const h = haystack.toLowerCase();
+  return words.every((w) => h.includes(w));
+}
 
 type Tab = "Stock" | "Movements" | "Purchase Orders" | "Suppliers" | "Warehouses";
 
@@ -71,6 +79,35 @@ function Inventory() {
           ))}
         </div>
         <div className="flex items-center gap-2">
+          {tab === "Stock" && k.out > 0 && (
+            <button
+              onClick={() => {
+                const oos = levels.filter((r: any) => r.quantity <= 0);
+                const rows: any[][] = [
+                  ["Product", "SKU", "Brand", "Category", "Warehouse", "Qty", "Reorder Pt", "Cost (₱)"],
+                  ...oos.map((l: any) => [
+                    l.product?.name ?? "",
+                    l.product?.sku ?? "",
+                    l.product?.brand?.name ?? "",
+                    l.product?.category?.name ?? "",
+                    l.warehouse?.name ?? "",
+                    Number(l.quantity ?? 0),
+                    Number(l.reorder_point ?? 0),
+                    Number(l.product?.cost_price ?? 0),
+                  ]),
+                ];
+                downloadExcel(
+                  `ADZ-Out-of-Stock-${format(new Date(), "yyyyMMdd")}`,
+                  "Out of Stock",
+                  rows,
+                  { headers: true, currency: [7] },
+                );
+              }}
+              className="h-9 px-3 rounded-xl border border-rose-300 bg-rose-50 text-rose-700 text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-rose-100"
+            >
+              <Download className="h-3.5 w-3.5" />Export Out of Stock ({k.out})
+            </button>
+          )}
           {tab === "Stock" && (
             <button onClick={() => setNewStockOpen(true)} className="h-9 px-3 rounded-xl bg-primary text-primary-foreground text-xs font-semibold inline-flex items-center gap-1.5 shadow-soft hover:opacity-95">
               <Plus className="h-3.5 w-3.5" />Add Stock Record
@@ -137,11 +174,13 @@ function InventorySearchEngine({ levels, onSelect }: { levels: any[]; onSelect: 
   }, []);
 
   const results = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    if (!term) return [];
+    if (!q.trim()) return [];
     return levels
-      .filter((r: any) => [r.product?.name, r.product?.sku, r.product?.brand?.name, r.product?.category?.name, r.warehouse?.name]
-        .filter(Boolean).join(" • ").toLowerCase().includes(term))
+      .filter((r: any) => {
+        const haystack = [r.product?.name, r.product?.brand?.name, r.product?.category?.name, r.warehouse?.name]
+          .filter(Boolean).join(" ");
+        return fuzzyMatch(haystack, q);
+      })
       .slice(0, 8);
   }, [levels, q]);
 
@@ -152,7 +191,7 @@ function InventorySearchEngine({ levels, onSelect }: { levels: any[]; onSelect: 
         value={q}
         onChange={(e) => { setQ(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
-        placeholder="Inventory search — product, SKU, brand, category, or warehouse…"
+        placeholder="Search by brand, variant, size…"
         className="w-full h-11 pl-10 pr-3 rounded-xl border border-border bg-card text-sm shadow-soft"
       />
       {open && q.trim() && (
@@ -186,9 +225,12 @@ function InventorySearchEngine({ levels, onSelect }: { levels: any[]; onSelect: 
 }
 
 /* ---------- Stock alert warning banner ---------- */
-function StockAlertBanner({ levels }: { levels: any[] }) {
+function StockAlertBanner({ levels, showOOS }: { levels: any[]; showOOS: boolean }) {
   const outOfStock = levels.filter((r: any) => r.quantity <= 0);
   const lowStock = levels.filter((r: any) => r.quantity > 0 && r.reorder_point > 0 && r.quantity <= r.reorder_point);
+
+  const visibleOOS = showOOS ? outOfStock : [];
+  const total = visibleOOS.length + lowStock.length;
   if (outOfStock.length === 0 && lowStock.length === 0) return null;
 
   const Item = ({ r, tone }: { r: any; tone: "danger" | "warn" }) => (
@@ -207,12 +249,17 @@ function StockAlertBanner({ levels }: { levels: any[] }) {
     <div className="rounded-2xl border border-amber-200 bg-amber-50/70 shadow-soft p-4 space-y-3">
       <div className="flex items-center gap-2">
         <AlertTriangle className="h-4 w-4 text-amber-600" />
-        <h3 className="font-semibold text-sm text-amber-900">Stock warnings — {outOfStock.length + lowStock.length} item{outOfStock.length + lowStock.length === 1 ? "" : "s"} need attention</h3>
+        <h3 className="font-semibold text-sm text-amber-900">
+          Stock warnings —{" "}
+          {outOfStock.length > 0 && !showOOS
+            ? `${lowStock.length} low stock · ${outOfStock.length} out of stock (hidden)`
+            : `${total} item${total === 1 ? "" : "s"} need attention`}
+        </h3>
       </div>
-      {outOfStock.length > 0 && (
+      {visibleOOS.length > 0 && (
         <div>
           <p className="text-[11px] uppercase tracking-wider font-semibold text-rose-700 mb-1.5">Out of stock ({outOfStock.length})</p>
-          <ul className="space-y-1.5">{outOfStock.map((r: any) => <Item key={r.id} r={r} tone="danger" />)}</ul>
+          <ul className="space-y-1.5">{visibleOOS.map((r: any) => <Item key={r.id} r={r} tone="danger" />)}</ul>
         </div>
       )}
       {lowStock.length > 0 && (
@@ -268,6 +315,8 @@ function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: an
   const { can } = useRbac();
   const canViewPrices = can("finance", "view");
   const [q, setQ] = useState("");
+  const [showLow, setShowLow] = useState(false);
+  const [showOOS, setShowOOS] = useState(false);
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
 
   useEffect(() => {
@@ -280,15 +329,28 @@ function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: an
   }, [highlightId, onHighlighted]);
 
   const term = q.trim().toLowerCase();
-  const filtered = levels.filter((r) =>
-    !term ||
-    r.product?.sku?.toLowerCase().includes(term) ||
-    r.product?.brand?.name?.toLowerCase().includes(term) ||
-    r.product?.category?.name?.toLowerCase().includes(term) ||
-    r.product?.description?.toLowerCase().includes(term) ||
-    r.product?.name?.toLowerCase().includes(term) ||
-    r.warehouse?.name?.toLowerCase().includes(term)
-  );
+  const filtered = useMemo(() => {
+    const matched = levels.filter((r: any) => {
+      if (!term) return true;
+      const haystack = [r.product?.name, r.product?.brand?.name, r.product?.category?.name, r.warehouse?.name]
+        .filter(Boolean).join(" ");
+      return fuzzyMatch(haystack, term);
+    });
+
+    const isOOS = (r: any) => r.quantity <= 0;
+    const isLow = (r: any) => r.quantity > 0 && r.reorder_point > 0 && r.quantity <= r.reorder_point;
+
+    // Filter mode: low stock only → show only low-stock rows
+    if (showLow) return matched.filter(isLow);
+
+    // Default mode: hide OOS unless toggle is on; OOS always sinks to bottom
+    const visible = showOOS ? matched : matched.filter((r) => !isOOS(r));
+    return [...visible].sort((a: any, b: any) => {
+      const aOOS = isOOS(a) ? 1 : 0;
+      const bOOS = isOOS(b) ? 1 : 0;
+      return aOOS - bOOS;
+    });
+  }, [levels, term, showLow, showOOS]);
 
   const totals = useMemo(() => {
     const units = filtered.reduce((s, r: any) => s + (r.quantity || 0), 0);
@@ -298,7 +360,7 @@ function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: an
 
   return (
     <div className="space-y-4">
-      <StockAlertBanner levels={levels} />
+      <StockAlertBanner levels={levels} showOOS={showOOS} />
       <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
         <div className="p-3 border-b border-border flex items-center gap-2 flex-wrap">
           <div className="relative max-w-md flex-1 min-w-[200px]">
@@ -307,6 +369,22 @@ function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: an
               placeholder="Search by item code, brand, item name, description, location…"
               className="w-full h-9 pl-9 pr-3 rounded-lg border border-border text-sm" />
           </div>
+          <button
+            onClick={() => { setShowLow((v) => !v); if (!showLow) setShowOOS(false); }}
+            className={`h-9 px-3 rounded-lg border text-xs font-semibold whitespace-nowrap transition-colors ${
+              showLow ? "border-amber-300 bg-amber-50 text-amber-700" : "border-border text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            <AlertTriangle className="h-3.5 w-3.5 inline mr-1" />Low stock
+          </button>
+          <button
+            onClick={() => { setShowOOS((v) => !v); if (!showOOS) setShowLow(false); }}
+            className={`h-9 px-3 rounded-lg border text-xs font-semibold whitespace-nowrap transition-colors ${
+              showOOS ? "border-rose-300 bg-rose-50 text-rose-700" : "border-border text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            <Archive className="h-3.5 w-3.5 inline mr-1" />Out of stock
+          </button>
         </div>
         <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -334,7 +412,8 @@ function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: an
                 <tr
                   key={r.id}
                   ref={(el) => { rowRefs.current[r.id] = el; }}
-                  className={`border-t border-border hover:bg-secondary/40 transition-colors duration-700 ${highlightId === r.id ? "bg-amber-100/70" : ""}`}
+                  onClick={() => onAdjust(r)}
+                  className={`border-t border-border hover:bg-secondary/40 transition-colors duration-700 cursor-pointer ${highlightId === r.id ? "bg-amber-100/70" : ""}`}
                 >
                   <td className="px-4 py-2.5 font-mono text-xs font-semibold text-muted-foreground whitespace-nowrap">{r.product?.sku ?? "—"}</td>
                   <td className="px-4 py-2.5 font-medium whitespace-nowrap">{r.product?.brand?.name ?? "—"}</td>
@@ -587,14 +666,16 @@ function MovementsTab() {
   const { data: movs = [] } = useStockMovements();
   const [q, setQ] = useState("");
   const term = q.trim().toLowerCase();
-  const filtered = movs.filter((m: any) =>
-    !term ||
-    m.product?.sku?.toLowerCase().includes(term) ||
-    m.product?.brand?.name?.toLowerCase().includes(term) ||
-    m.product?.category?.name?.toLowerCase().includes(term) ||
-    (m.reference_number ?? "").toLowerCase().includes(term) ||
-    (m.prepared_by ?? "").toLowerCase().includes(term)
-  );
+  const filtered = movs.filter((m: any) => {
+    if (!term) return true;
+    const productHaystack = [m.product?.name, m.product?.brand?.name, m.product?.category?.name]
+      .filter(Boolean).join(" ");
+    return (
+      fuzzyMatch(productHaystack, term) ||
+      (m.reference_number ?? "").toLowerCase().includes(term) ||
+      (m.prepared_by ?? "").toLowerCase().includes(term)
+    );
+  });
 
   return (
     <div className="space-y-3">
@@ -701,7 +782,7 @@ function POTab() {
             {pos.length === 0 ? (
               <tr><td colSpan={6} className="text-center px-6 py-10 text-muted-foreground">No purchase orders yet.</td></tr>
             ) : pos.map((p: any) => (
-              <tr key={p.id} className="border-t border-border">
+              <tr key={p.id} className="border-t border-border hover:bg-secondary/40">
                 <td className="px-6 py-3 font-medium">{p.po_number}</td>
                 <td className="px-6 py-3">{p.supplier?.name}</td>
                 <td className="px-6 py-3">{p.warehouse?.name}</td>
@@ -765,12 +846,12 @@ function SuppliersTab() {
             {suppliers.length === 0 ? (
               <tr><td colSpan={5} className="text-center px-6 py-10 text-muted-foreground">No suppliers yet.</td></tr>
             ) : suppliers.map((s: any) => (
-              <tr key={s.id} className="border-t border-border">
+              <tr key={s.id} onClick={() => { setEditing(s); setOpen(true); }} className="border-t border-border hover:bg-secondary/40 cursor-pointer">
                 <td className="px-6 py-3 font-medium">{s.name}</td>
                 <td className="px-6 py-3">{s.contact_person}</td>
                 <td className="px-6 py-3 text-muted-foreground">{s.email}</td>
                 <td className="px-6 py-3 text-muted-foreground">{s.phone}</td>
-                <td className="px-6 py-3 text-right">
+                <td className="px-6 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                   <button disabled={!canEdit} onClick={() => { setEditing(s); setOpen(true); }} className="h-7 w-7 rounded inline-flex items-center justify-center hover:bg-secondary"><Edit2 className="h-3.5 w-3.5" /></button>
                   <button disabled={!canEdit} onClick={() => { if (confirm("Delete?")) del.mutate(s.id); }} className="h-7 w-7 rounded inline-flex items-center justify-center text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /></button>
                 </td>

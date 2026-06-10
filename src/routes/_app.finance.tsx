@@ -2,7 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ArrowDownRight, ArrowUpRight, Wallet, Receipt, Plus, Trash2, Edit2, Search, Repeat, CheckCircle2 } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Wallet, Receipt, Plus, Trash2, Edit2, Search, Repeat, CheckCircle2, Download } from "lucide-react";
+import { downloadExcel } from "@/lib/export-excel";
+import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useFinanceTxns, useRecurringBills, useBranches, useInsert, useUpdate, useDelete, useNotifications, peso, useIsOwner } from "@/lib/db";
 import { toast } from "sonner";
@@ -276,9 +278,35 @@ function Finance() {
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search transactions..." className="w-full h-10 pl-9 pr-3 rounded-xl border border-border bg-card text-sm" />
         </div>
-        <button disabled={!canEdit} onClick={() => { setEditing(null); setOpen(true); }} className="h-10 px-4 rounded-xl bg-primary text-primary-foreground text-xs font-semibold inline-flex items-center gap-1.5 shadow-soft">
-          <Plus className="h-4 w-4" />New Transaction
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const rows: any[][] = [
+                ["Date", "Type", "Category", "Method", "Amount (₱)", "Description"],
+                ...filtered.map((t: any) => [
+                  t.txn_date,
+                  t.direction === "in" ? "Inflow" : "Outflow",
+                  t.category ?? "",
+                  t.method ?? "",
+                  Number(t.amount ?? 0),
+                  t.description ?? "",
+                ]),
+              ];
+              downloadExcel(
+                `ADZ-Finance-${format(new Date(), "yyyyMMdd-HHmm")}`,
+                "Finance Transactions",
+                rows,
+                { headers: true, currency: [4] },
+              );
+            }}
+            className="h-10 px-4 rounded-xl border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary"
+          >
+            <Download className="h-4 w-4" />Export Excel
+          </button>
+          <button disabled={!canEdit} onClick={() => { setEditing(null); setOpen(true); }} className="h-10 px-4 rounded-xl bg-primary text-primary-foreground text-xs font-semibold inline-flex items-center gap-1.5 shadow-soft">
+            <Plus className="h-4 w-4" />New Transaction
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
@@ -290,14 +318,14 @@ function Finance() {
             {filtered.length === 0 ? (
               <tr><td colSpan={5} className="text-center py-10 text-muted-foreground">No transactions yet.</td></tr>
             ) : filtered.map((t: any) => (
-              <tr key={t.id} className="border-t border-border hover:bg-secondary/40">
+              <tr key={t.id} onClick={() => { setEditing(t); setOpen(true); }} className="border-t border-border hover:bg-secondary/40 cursor-pointer">
                 <td className="px-6 py-3">{t.txn_date}</td>
                 <td className="px-6 py-3">
                   <span className={"inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium " + (t.direction === "in" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700")}>{DIRECTION_LABELS[t.direction] ?? t.direction}</span>
                 </td>
                 <td className="px-6 py-3 text-muted-foreground">{t.description}</td>
                 <td className={"px-6 py-3 text-right font-semibold " + (t.direction === "in" ? "text-emerald-700" : "text-rose-700")}>{t.direction === "in" ? "+" : "−"}{peso(Number(t.amount))}</td>
-                <td className="px-6 py-3 text-right">
+                <td className="px-6 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                   <div className="inline-flex gap-2">
                     <button disabled={!canEdit} onClick={() => { setEditing(t); setOpen(true); }} className="p-1.5 rounded-lg hover:bg-secondary"><Edit2 className="h-3.5 w-3.5" /></button>
                     <button disabled={!canEdit} onClick={() => { if (confirm("Delete transaction?")) del.mutate(t.id); }} className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>

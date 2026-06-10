@@ -121,7 +121,6 @@ function MyPayslips() {
                     <Line label="SSS" value={peso(Number(selected.sss || 0))} negative />
                     <Line label="PhilHealth" value={peso(Number(selected.philhealth || 0))} negative />
                     <Line label="Pag-IBIG" value={peso(Number(selected.pagibig || 0))} negative />
-                    <Line label="Withholding Tax" value={peso(Number(selected.withholding_tax || 0))} negative />
                     {Number(selected.late_deduction) > 0 && (
                       <Line label="Late Deduction" value={peso(Number(selected.late_deduction))} negative />
                     )}

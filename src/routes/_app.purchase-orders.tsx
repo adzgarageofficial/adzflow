@@ -118,11 +118,10 @@ function NewPODialog({ open, onClose }: { open: boolean; onClose: () => void }) 
     setBusy(true);
     try {
       const po_number = form.po_number || `PO-${Date.now().toString().slice(-6)}`;
-      const tax = subtotal * 0.12;
-      const total = subtotal + tax;
+      const total = subtotal;
       const po: any = await new Promise((resolve, reject) =>
         insertPO.mutate(
-          { ...form, po_number, subtotal, tax, total },
+          { ...form, po_number, subtotal, tax: 0, total },
           { onSuccess: resolve, onError: reject },
         ),
       );
@@ -203,9 +202,7 @@ function NewPODialog({ open, onClose }: { open: boolean; onClose: () => void }) 
           </div>
 
           <div className="text-right text-sm">
-            <div>Subtotal: <span className="font-mono">{peso(subtotal)}</span></div>
-            <div>Tax (12%): <span className="font-mono">{peso(subtotal * 0.12)}</span></div>
-            <div className="text-lg font-bold mt-1">Total: <span className="font-mono">{peso(subtotal * 1.12)}</span></div>
+            <div className="text-lg font-bold mt-1">Total: <span className="font-mono">{peso(subtotal)}</span></div>
           </div>
         </div>
         <div className="flex justify-end gap-2 mt-4">

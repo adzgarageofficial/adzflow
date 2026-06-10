@@ -16,8 +16,8 @@ import {
   Car,
   Wrench,
   FileText,
-  Gauge,
   CalendarDays,
+  LayoutGrid,
   Users2,
   Building2,
   Clock,
@@ -34,6 +34,7 @@ import {
   Wallet as WalletIcon,
   Undo2,
   Gift,
+  Tag,
   MessageSquare,
   Star,
   Bell,
@@ -78,6 +79,7 @@ export const GROUPS: Group[] = [
     id: "sales", title: "Sales", icon: ShoppingCart,
     items: [
       { title: "POS", url: "/pos", icon: ScanLine, mod: "pos" },
+      { title: "Reservations", url: "/reservations", icon: CalendarClock, mod: "reservations" },
       { title: "Orders", url: "/orders", icon: ShoppingBag, mod: "orders" },
       { title: "Cash Drawer", url: "/cash-drawer", icon: WalletIcon, mod: "cashDrawer" },
       { title: "Refunds & Voids", url: "/refunds", icon: Undo2, mod: "refunds" },
@@ -89,8 +91,7 @@ export const GROUPS: Group[] = [
       { title: "Job Orders", url: "/job-orders", icon: Wrench, mod: "jobOrders" },
       { title: "Quotations", url: "/quotations", icon: FileText, mod: "quotations" },
       { title: "Bookings", url: "/bookings", icon: CalendarDays, mod: "bookings" },
-      { title: "Garage", url: "/garage", icon: Car, mod: "garage" },
-      { title: "Fitment", url: "/fitment", icon: Gauge, mod: "fitment" },
+      { title: "Bay Queue", url: "/bays", icon: LayoutGrid, mod: "garage" },
     ],
   },
   {
@@ -114,6 +115,7 @@ export const GROUPS: Group[] = [
   {
     id: "marketing", title: "Marketing", icon: TrendingUp,
     items: [
+      { title: "Promotions", url: "/promos", icon: Tag, mod: "promos" },
       { title: "Ecommerce", url: "/ecommerce", icon: Store, mod: "ecommerce" },
       { title: "Marketing", url: "/marketing", icon: Megaphone, mod: "marketing" },
       { title: "Analytics", url: "/analytics", icon: BarChart3, mod: "analytics" },

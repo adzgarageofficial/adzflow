@@ -11,7 +11,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, UserCog, UserPlus, Copy, Check } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useProfiles, useUserRoles, useSetUserRole, useBranches, useIsOwner } from "@/lib/db";
+import { useProfiles, useUserRoles, useSetUserRole, useBranches, useCurrentUserRoles } from "@/lib/db";
 import { createTeamMember } from "@/lib/team-members";
 import { toast } from "sonner";
 
@@ -33,7 +33,9 @@ function UsersPage() {
   const { data: roles = [] } = useUserRoles();
   const { data: branches = [] } = useBranches();
   const setRole = useSetUserRole();
-  const canEdit = useIsOwner();
+  const { data: myRoles = [] } = useCurrentUserRoles();
+  const isOwner = myRoles.includes("owner");
+  const canEdit = isOwner || myRoles.includes("admin");
   const [q, setQ] = useState("");
   const [addOpen, setAddOpen] = useState(false);
 
@@ -127,7 +129,7 @@ function UsersPage() {
                         onChange={(e) => setRole.mutate({ user_id: u.id, role: e.target.value }, { onSuccess: () => toast.success("Role updated") })}
                         className="h-9 rounded-lg border border-border bg-white px-3 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                        {ROLES.filter((r) => isOwner || (r !== "owner" && r !== "admin")).map((r) => <option key={r} value={r}>{r}</option>)}
                       </select>
                     </div>
                   </TableCell>
@@ -144,12 +146,12 @@ function UsersPage() {
         </p>
       )}
 
-      <AddTeamMemberDialog open={addOpen} onClose={() => setAddOpen(false)} branches={branches as any[]} />
+      <AddTeamMemberDialog open={addOpen} onClose={() => setAddOpen(false)} branches={branches as any[]} isOwner={isOwner} />
     </PageShell>
   );
 }
 
-function AddTeamMemberDialog({ open, onClose, branches }: { open: boolean; onClose: () => void; branches: any[] }) {
+function AddTeamMemberDialog({ open, onClose, branches, isOwner }: { open: boolean; onClose: () => void; branches: any[]; isOwner: boolean }) {
   const queryClient = useQueryClient();
   const callCreateTeamMember = useServerFn(createTeamMember);
 
@@ -259,7 +261,7 @@ function AddTeamMemberDialog({ open, onClose, branches }: { open: boolean; onClo
                 <Select value={role} onValueChange={setRole}>
                   <SelectTrigger className="mt-1.5 h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    {ROLES.filter((r) => isOwner || (r !== "owner" && r !== "admin")).map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

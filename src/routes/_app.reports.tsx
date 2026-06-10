@@ -14,7 +14,8 @@ import {
   Line, LineChart, Cell, Pie, PieChart, Legend,
 } from "recharts";
 import { Download, FileSpreadsheet, TrendingUp, ShoppingCart, Boxes, Users, Wrench, Wallet } from "lucide-react";
-import { format, subDays, startOfDay, endOfDay, isWithinInterval, formatDistanceToNow } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, formatDistanceToNow } from "date-fns";
+import { downloadExcel } from "@/lib/export-excel";
 
 /* ---------- Live-updating Sales Report: subscribe to order changes in real time ---------- */
 function useLiveSales(active: boolean) {
@@ -63,6 +64,30 @@ function LiveBadge({ connected, lastEvent }: { connected: boolean; lastEvent: Da
 export const Route = createFileRoute("/_app/reports")({ component: Reports });
 
 type ReportType = "sales" | "inventory" | "job_orders" | "customers" | "finance" | "payroll";
+type PeriodKey = "today" | "week" | "month" | "year" | "7d" | "30d" | "90d";
+
+const PERIOD_LABELS: Record<PeriodKey, string> = {
+  today: "Today",
+  week: "This Week",
+  month: "This Month",
+  year: "This Year",
+  "7d": "Last 7d",
+  "30d": "Last 30d",
+  "90d": "Last 90d",
+};
+
+function getPeriodRange(key: PeriodKey): { from: Date; to: Date } {
+  const now = new Date();
+  switch (key) {
+    case "today": return { from: startOfDay(now), to: endOfDay(now) };
+    case "week": return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) };
+    case "month": return { from: startOfMonth(now), to: endOfMonth(now) };
+    case "year": return { from: startOfYear(now), to: endOfYear(now) };
+    case "7d": return { from: startOfDay(subDays(now, 6)), to: endOfDay(now) };
+    case "30d": return { from: startOfDay(subDays(now, 29)), to: endOfDay(now) };
+    case "90d": return { from: startOfDay(subDays(now, 89)), to: endOfDay(now) };
+  }
+}
 
 const REPORT_META: Record<ReportType, { label: string; Icon: any; color: string }> = {
   sales: { label: "Sales Report", Icon: ShoppingCart, color: "text-emerald-500" },
@@ -75,20 +100,10 @@ const REPORT_META: Record<ReportType, { label: string; Icon: any; color: string 
 
 const COLORS = ["oklch(0.62 0.24 27)", "oklch(0.7 0.18 145)", "oklch(0.68 0.18 240)", "oklch(0.72 0.18 60)", "oklch(0.65 0.2 300)"];
 
-function downloadCsv(filename: string, rows: any[][]) {
-  const csv = rows.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 function Reports() {
   const [type, setType] = useState<ReportType>("sales");
-  const [days, setDays] = useState(30);
+  const [period, setPeriod] = useState<PeriodKey>("month");
   const [selected, setSelected] = useState<{ type: ReportType; record: any } | null>(null);
 
   const live = useLiveSales(type === "sales");
@@ -99,8 +114,7 @@ function Reports() {
   const { data: txns = [] } = useFinanceTxns();
   const { data: employees = [] } = useEmployees();
 
-  const from = startOfDay(subDays(new Date(), days));
-  const to = endOfDay(new Date());
+  const { from, to } = getPeriodRange(period);
   const inRange = (d: string | Date) => {
     if (!d) return false;
     try { return isWithinInterval(new Date(d), { start: from, end: to }); } catch { return false; }
@@ -168,54 +182,69 @@ function Reports() {
         return { rows, chart, total, count: rows.length };
       }
     }
-  }, [type, orders, jobs, inv, customers, txns, employees, days]);
+  }, [type, orders, jobs, inv, customers, txns, employees, period, from, to]);
 
-  const exportCsv = () => {
+  const exportExcel = () => {
     const ts = format(new Date(), "yyyyMMdd-HHmm");
+    const periodLabel = PERIOD_LABELS[period];
     let rows: any[][] = [];
+    let currency: number[] = [];
     switch (type) {
       case "sales":
-        rows = [["Date", "Order #", "Customer", "Total", "Status"]];
+        rows = [["Date", "Order #", "Customer", "Total (₱)", "Status"]];
         (data.rows as any[]).forEach((o) => rows.push([
           format(new Date(o.created_at), "yyyy-MM-dd HH:mm"),
-          o.order_number, o.customer?.full_name ?? "Walk-in", o.total, o.status,
+          o.order_number, o.customer?.full_name ?? "Walk-in", Number(o.total ?? 0), o.status,
         ]));
+        currency = [3];
         break;
       case "inventory":
-        rows = [["Product", "SKU", "Warehouse", "Qty", "Cost", "Value", "Reorder Pt", "Low?"]];
+        rows = [["Product", "SKU", "Warehouse", "Qty", "Cost (₱)", "Value (₱)", "Reorder Pt", "Low?"]];
         (data.rows as any[]).forEach((l) => rows.push([
-          l.product?.name, l.product?.sku, l.warehouse?.name, l.quantity,
-          l.product?.cost_price, l.value, l.reorder_point, l.low ? "YES" : "",
+          l.product?.name, l.product?.sku, l.warehouse?.name, Number(l.quantity ?? 0),
+          Number(l.product?.cost_price ?? 0), Number(l.value ?? 0), Number(l.reorder_point ?? 0), l.low ? "YES" : "",
         ]));
+        currency = [4, 5];
         break;
       case "job_orders":
-        rows = [["Date", "Job #", "Customer", "Status", "Parts", "Labor", "Total"]];
+        rows = [["Date", "Job #", "Customer", "Status", "Parts (₱)", "Labor (₱)", "Total (₱)"]];
         (data.rows as any[]).forEach((j) => rows.push([
           format(new Date(j.created_at), "yyyy-MM-dd"),
-          j.job_number, j.customer?.full_name, j.status, j.parts_cost, j.labor_cost, j.total,
+          j.job_number, j.customer?.full_name, j.status,
+          Number(j.parts_cost ?? 0), Number(j.labor_cost ?? 0), Number(j.total ?? 0),
         ]));
+        currency = [4, 5, 6];
         break;
       case "customers":
-        rows = [["Name", "Email", "Phone", "Loyalty Pts", "Lifetime Value"]];
+        rows = [["Name", "Email", "Phone", "Loyalty Pts", "Lifetime Value (₱)"]];
         (data.rows as any[]).forEach((c) => rows.push([
-          c.full_name, c.email, c.phone, c.loyalty_points, c.lifetime_value,
+          c.full_name, c.email, c.phone, Number(c.loyalty_points ?? 0), Number(c.lifetime_value ?? 0),
         ]));
+        currency = [4];
         break;
       case "finance":
-        rows = [["Date", "Direction", "Category", "Method", "Amount", "Description"]];
+        rows = [["Date", "Direction", "Category", "Method", "Amount (₱)", "Description"]];
         (data.rows as any[]).forEach((t) => rows.push([
-          t.txn_date, t.direction, t.category, t.method, t.amount, t.description,
+          t.txn_date, t.direction, t.category, t.method ?? "", Number(t.amount ?? 0), t.description ?? "",
         ]));
+        currency = [4];
         break;
       case "payroll":
-        rows = [["Employee #", "Name", "Position", "Basic", "Allowance", "Total"]];
+        rows = [["Employee #", "Name", "Position", "Basic (₱)", "Allowance (₱)", "Gross (₱)"]];
         (data.rows as any[]).forEach((e) => rows.push([
           e.employee_number, `${e.first_name} ${e.last_name}`, e.position_id ?? "",
-          e.basic_salary, e.allowance, Number(e.basic_salary ?? 0) + Number(e.allowance ?? 0),
+          Number(e.basic_salary ?? 0), Number(e.allowance ?? 0),
+          Number(e.basic_salary ?? 0) + Number(e.allowance ?? 0),
         ]));
+        currency = [3, 4, 5];
         break;
     }
-    downloadCsv(`${type}-report-${ts}.csv`, rows);
+    downloadExcel(
+      `ADZ-${type}-${periodLabel.replace(/\s+/g, "-")}-${ts}`,
+      REPORT_META[type].label,
+      rows,
+      { headers: true, currency },
+    );
   };
 
   return (
@@ -223,8 +252,8 @@ function Reports() {
       title="Reports"
       subtitle="Live exports across sales, inventory, jobs, finance & HR."
       actions={
-        <button onClick={exportCsv} className="h-9 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold flex items-center gap-1.5">
-          <Download className="h-3.5 w-3.5" /> Export CSV
+        <button onClick={exportExcel} className="h-9 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold flex items-center gap-1.5">
+          <Download className="h-3.5 w-3.5" /> Export Excel
         </button>
       }
     >
@@ -255,14 +284,14 @@ function Reports() {
             <p className="text-xs text-muted-foreground">{data.count} records · {type === "inventory" ? `valued ${peso(data.total)}` : `total ${peso(data.total)}`}</p>
           </div>
           {type !== "inventory" && type !== "customers" && type !== "payroll" && (
-            <div className="flex items-center gap-1">
-              {[7, 30, 90, 365].map((n) => (
+            <div className="flex items-center gap-1 flex-wrap">
+              {(["today", "week", "month", "year", "7d", "30d", "90d"] as PeriodKey[]).map((k) => (
                 <button
-                  key={n}
-                  onClick={() => setDays(n)}
-                  className={`h-8 px-3 rounded-lg text-xs font-semibold ${days === n ? "bg-primary text-primary-foreground" : "border border-border"}`}
+                  key={k}
+                  onClick={() => setPeriod(k)}
+                  className={`h-8 px-3 rounded-lg text-xs font-semibold ${period === k ? "bg-primary text-primary-foreground" : "border border-border"}`}
                 >
-                  {n}d
+                  {PERIOD_LABELS[k]}
                 </button>
               ))}
             </div>
@@ -474,7 +503,7 @@ function RecordDetailCard({ type, record: r }: { type: ReportType; record: any }
           <DetailRow label="Channel" value={r.channel} />
           <DetailRow label="Subtotal" value={peso(Number(r.subtotal ?? 0))} />
           <DetailRow label="Discount" value={peso(Number(r.discount ?? 0))} />
-          <DetailRow label="Tax" value={peso(Number(r.tax ?? 0))} />
+
           <DetailRow label="Amount Paid" value={peso(Number(r.amount_paid ?? 0))} />
           <DetailRow label="Total" value={<span className="text-base font-bold text-primary">{peso(Number(r.total ?? 0))}</span>} />
           {r.notes && <DetailRow label="Notes" value={r.notes} />}

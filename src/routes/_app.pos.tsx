@@ -1,9 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useProducts, useCustomers, useBranches, useOrders, peso,
-  useMyProfile, useCurrentUserRoles, useDiscountApprovals, useInsert, useUpdate, useInventoryLevels,
+  useMyProfile, useCurrentUserRoles, useDiscountApprovals, useInsert, useUpdate, useInventoryLevels, useList,
 } from "@/lib/db";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,12 +12,19 @@ import {
   Search, Plus, Minus, Trash2, Banknote, Smartphone, CreditCard,
   Building2, Link2, Check, Receipt, Pause, FileText, Undo2, PlusCircle, Wrench, Hammer, Package,
   Wallet, Printer, ScanBarcode, Car, Download, ShieldCheck, ShieldAlert, ShieldQuestion, Hourglass, X, CalendarClock, Truck, ShoppingBag,
+  BookmarkPlus, Upload, ImageIcon, Tag, Mail, Phone,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { downloadElementAsPdf } from "@/lib/pdf";
 
 export const Route = createFileRoute("/_app/pos")({ component: POSPage });
+
+function fuzzyMatch(haystack: string, query: string): boolean {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const h = haystack.toLowerCase();
+  return words.every((w) => h.includes(w));
+}
 
 type CartItem = { id: string; name: string; sku: string; price: number; qty: number; custom?: boolean };
 type Suspended = {
@@ -63,6 +70,10 @@ const FULFILLMENT_LABELS: Record<string, string> = {
 function POSPage() {
   const { data: products = [] } = useProducts();
   const { data: inventoryLevels = [] } = useInventoryLevels();
+  const { data: activePromos = [] } = useList<any>("promos", {
+    filters: (q: any) => q.eq("is_active", true),
+    order: { column: "name", ascending: true },
+  });
   const { data: customers = [] } = useCustomers();
   const { data: branches = [] } = useBranches();
   const { data: recentOrders = [] } = useOrders();
@@ -75,13 +86,14 @@ function POSPage() {
   const qc = useQueryClient();
 
   const [query, setQuery] = useState("");
+  const [showPromos, setShowPromos] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountRequestId, setDiscountRequestId] = useState<string | null>(null);
   const [requestingApproval, setRequestingApproval] = useState(false);
   const [showApprovals, setShowApprovals] = useState(false);
   const [method, setMethod] = useState<(typeof methods)[number]["id"]>("cash");
-  const [fulfillment, setFulfillment] = useState<"takeout" | "shipping" | "installation">("takeout");
+  const [fulfillment, setFulfillment] = useState<"takeout" | "shipping" | "installation">("installation");
   const [customerId, setCustomerId] = useState<string>("");
   const [branchId, setBranchId] = useState<string>("");
   const [cashReceived, setCashReceived] = useState("");
@@ -98,8 +110,19 @@ function POSPage() {
   const [draftNotes, setDraftNotes] = useState("");
   const [customItem, setCustomItem] = useState({ name: "", price: "", qty: "1" });
 
+  // Reservation
+  const [showReserve, setShowReserve] = useState(false);
+  const [reserveForm, setReserveForm] = useState({ customerName: "", vehicle: "", plateNumber: "", downPayment: "", notes: "" });
+  const [reserveReceiptFile, setReserveReceiptFile] = useState<File | null>(null);
+  const [reserveReceiptPreview, setReserveReceiptPreview] = useState<string | null>(null);
+  const [reserving, setReserving] = useState(false);
+  const reserveFileRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+
   // Walk-in info & custom labor
   const [walkInName, setWalkInName] = useState("");
+  const [walkInEmail, setWalkInEmail] = useState("");
+  const [walkInPhone, setWalkInPhone] = useState("");
   const [walkInVehicle, setWalkInVehicle] = useState("");
   const [walkInPlate, setWalkInPlate] = useState("");
   const [showCustomLabor, setShowCustomLabor] = useState(false);
@@ -109,6 +132,16 @@ function POSPage() {
   useEffect(() => { setParked(loadLS<Suspended>(PARK_KEY)); setDrafts(loadLS<Suspended>(DRAFT_KEY)); }, []);
   useEffect(() => { saveLS(PARK_KEY, parked); }, [parked]);
   useEffect(() => { saveLS(DRAFT_KEY, drafts); }, [drafts]);
+
+  // Sum quantity across all warehouses per product
+  const stockByProduct = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const lvl of inventoryLevels as any[]) {
+      if (lvl.product_id == null) continue;
+      map[lvl.product_id] = (map[lvl.product_id] ?? 0) + (lvl.quantity ?? 0);
+    }
+    return map;
+  }, [inventoryLevels]);
 
   // FIFO/FEFO: earliest expiry/best-by date on hand per product, across all warehouses —
   // tires age even unsold, so the picker nudges cashiers to move the oldest batch first.
@@ -122,9 +155,19 @@ function POSPage() {
   }, [inventoryLevels]);
 
   const filtered = useMemo(() => {
-    const list = products.filter((p: any) => !query || p.name?.toLowerCase().includes(query.toLowerCase()) || p.sku?.toLowerCase().includes(query.toLowerCase()));
-    if (!Object.keys(earliestExpiryByProduct).length) return list;
-    return [...list].sort((a: any, b: any) => {
+    const q = query.trim().toLowerCase();
+    const matched = (products as any[]).filter((p) => {
+      if (!q) return true;
+      const haystack = [p.name, p.brand?.name].filter(Boolean).join(" ");
+      return fuzzyMatch(haystack, q);
+    });
+    // A product is OOS only when it has inventory records that sum to ≤ 0
+    const isOOS = (p: any) => p.id in stockByProduct && stockByProduct[p.id] <= 0;
+    // Sort: in-stock first, OOS always at the bottom; within each group sort by FIFO expiry
+    return [...matched].sort((a, b) => {
+      const aOOS = isOOS(a) ? 1 : 0;
+      const bOOS = isOOS(b) ? 1 : 0;
+      if (aOOS !== bOOS) return aOOS - bOOS;
       const ea = earliestExpiryByProduct[a.id];
       const eb = earliestExpiryByProduct[b.id];
       if (ea && eb) return ea.localeCompare(eb);
@@ -132,7 +175,7 @@ function POSPage() {
       if (eb) return 1;
       return 0;
     });
-  }, [products, query, earliestExpiryByProduct]);
+  }, [products, query, stockByProduct, earliestExpiryByProduct]);
 
   const subtotal = cart.reduce((s, c) => s + c.price * c.qty, 0);
   const requestedDiscount = Math.min(Math.max(0, Number(discountAmount) || 0), subtotal);
@@ -156,7 +199,6 @@ function POSPage() {
   const discountPending = approvalCurrent && discountRequest.status === "pending";
   const discountDenied = approvalCurrent && discountRequest.status === "denied";
   const discount = discountApproved ? requestedDiscount : 0;
-  const tax = 0;
   const total = subtotal - discount;
   const change = Math.max(0, Number(cashReceived || 0) - total);
 
@@ -194,6 +236,16 @@ function POSPage() {
       return [...c, { id: p.id, name: p.name, sku: p.sku, price, qty: 1 }];
     });
   }
+
+  function addPromoToCart(p: any) {
+    const cartId = `promo-${p.id}`;
+    setCart((c) => {
+      const ex = c.find((x) => x.id === cartId);
+      if (ex) return c.map((x) => (x.id === cartId ? { ...x, qty: x.qty + 1 } : x));
+      return [...c, { id: cartId, name: `🏷 ${p.name}`, sku: "PROMO", price: Number(p.promo_price), qty: 1, custom: true }];
+    });
+    toast.success(`${p.name} added to cart`);
+  }
   function updateQty(id: string, delta: number) {
     setCart((c) => c.map((x) => (x.id === id ? { ...x, qty: Math.max(1, x.qty + delta) } : x)));
   }
@@ -209,7 +261,7 @@ function POSPage() {
   function resetSale() {
     setCart([]); setDiscountAmount(0); setDiscountRequestId(null); setCustomerId(""); setBranchId(""); setCashReceived("");
     setPaymentReference(""); setMethod("cash"); setFulfillment("takeout");
-    setWalkInName(""); setWalkInVehicle(""); setWalkInPlate(""); setPendingOrderId(null);
+    setWalkInName(""); setWalkInEmail(""); setWalkInPhone(""); setWalkInVehicle(""); setWalkInPlate(""); setPendingOrderId(null);
   }
   function parkOrder() {
     if (cart.length === 0) return toast.error("Cart is empty");
@@ -295,6 +347,36 @@ function POSPage() {
           ].filter(Boolean).join(" | ")
         : "";
 
+      // Auto-create customer from walk-in contact info so they appear in marketing lists
+      let resolvedCustomerId = customerId;
+      if (!customerId && walkInName.trim() && (walkInEmail.trim() || walkInPhone.trim())) {
+        try {
+          // Check if customer already exists by email
+          let existing: any = null;
+          if (walkInEmail.trim()) {
+            const { data: found } = await (supabase as any)
+              .from("customers").select("id").eq("email", walkInEmail.trim()).maybeSingle();
+            existing = found;
+          }
+          if (existing) {
+            resolvedCustomerId = existing.id;
+            // Patch phone if missing
+            if (walkInPhone.trim()) {
+              await (supabase as any).from("customers")
+                .update({ phone: walkInPhone.trim() }).eq("id", existing.id);
+            }
+          } else {
+            const { data: created } = await (supabase as any).from("customers").insert({
+              full_name: walkInName.trim(),
+              email: walkInEmail.trim() || null,
+              phone: walkInPhone.trim() || null,
+            }).select("id").single();
+            if (created) resolvedCustomerId = created.id;
+          }
+          qc.invalidateQueries({ queryKey: ["customers"] });
+        } catch { /* non-blocking — order still proceeds */ }
+      }
+
       let order: any;
       if (pendingOrderId) {
         // Pay an existing pending order — update instead of insert
@@ -302,9 +384,9 @@ function POSPage() {
           .from("orders")
           .update({
             status,
-            customer_id: customerId || null,
+            customer_id: resolvedCustomerId || null,
             branch_id: branchId || null,
-            subtotal, discount, tax, total,
+            subtotal, discount, tax: 0, total,
             amount_paid: status === "paid" ? total : 0,
             notes: walkInNote || null,
             fulfillment_type: fulfillment,
@@ -321,10 +403,10 @@ function POSPage() {
             order_number: orderNumber,
             channel: "pos",
             status,
-            customer_id: customerId || null,
+            customer_id: resolvedCustomerId || null,
             branch_id: branchId || null,
             cashier_id: userRes.user?.id ?? null,
-            subtotal, discount, tax, total,
+            subtotal, discount, tax: 0, total,
             amount_paid: status === "paid" ? total : 0,
             notes: walkInNote || null,
             fulfillment_type: fulfillment,
@@ -362,7 +444,7 @@ function POSPage() {
         items: cart.map((c) => ({ name: c.name, quantity: c.qty, line_total: c.price * c.qty })),
         change, method, fulfillment,
         walkInName, walkInVehicle, walkInPlate,
-        customerName: customers.find((x: any) => x.id === customerId)?.full_name,
+        customerName: customers.find((x: any) => x.id === resolvedCustomerId)?.full_name ?? (resolvedCustomerId !== customerId ? walkInName : undefined),
       });
       resetSale();
       toast.success(status === "pending" ? "Order saved as pending" : "Sale completed");
@@ -449,6 +531,70 @@ function POSPage() {
     }
   }
 
+  async function submitReservation() {
+    if (!reserveForm.customerName.trim()) return toast.error("Ilagay ang pangalan ng customer");
+    if (!reserveForm.vehicle.trim()) return toast.error("Ilagay ang sasakyan");
+    if (!reserveForm.plateNumber.trim()) return toast.error("Ilagay ang plate number");
+    if (cart.length === 0) return toast.error("Walang items/services sa cart");
+    if (!reserveForm.downPayment || Number(reserveForm.downPayment) <= 0) return toast.error("Ilagay ang halaga ng down payment");
+    if (!reserveReceiptFile) return toast.error("I-upload ang larawan ng resibo ng down payment");
+
+    setReserving(true);
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+
+      // Upload receipt image
+      const ext = reserveReceiptFile.name.split(".").pop() ?? "jpg";
+      const filePath = `receipts/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("reservation-receipts")
+        .upload(filePath, reserveReceiptFile, { upsert: false });
+      if (upErr) throw upErr;
+
+      const { data: pubData } = supabase.storage.from("reservation-receipts").getPublicUrl(filePath);
+      const receiptUrl = pubData?.publicUrl ?? null;
+
+      const reservationNumber = `RES-${Date.now().toString().slice(-8)}`;
+      const { error: insErr } = await (supabase as any).from("reservations").insert({
+        reservation_number: reservationNumber,
+        customer_name: reserveForm.customerName.trim(),
+        vehicle: reserveForm.vehicle.trim(),
+        plate_number: reserveForm.plateNumber.trim().toUpperCase(),
+        items: cart.map((c) => ({ id: c.id, name: c.name, sku: c.sku, price: c.price, qty: c.qty })),
+        down_payment_amount: Number(reserveForm.downPayment),
+        down_payment_receipt_url: receiptUrl,
+        notes: reserveForm.notes.trim() || null,
+        reserved_by: userRes.user?.id ?? null,
+        reserved_by_name: myProfile?.display_name ?? null,
+        status: "pending",
+      });
+      if (insErr) throw insErr;
+
+      qc.invalidateQueries({ queryKey: ["reservations"] });
+      await supabase.from("notifications").insert({
+        title: "Bagong Reservation",
+        body: `${reserveForm.customerName} ay nag-reserve ng ${cart.length} item(s). Down payment: ${peso(Number(reserveForm.downPayment))}. Plate: ${reserveForm.plateNumber.toUpperCase()}.`,
+        severity: "info",
+        category: "ops",
+        audience_role: "owner",
+        link: "/reservations",
+      });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+
+      toast.success(`Reservation ${reservationNumber} saved!`);
+      setShowReserve(false);
+      setReserveForm({ customerName: "", vehicle: "", plateNumber: "", downPayment: "", notes: "" });
+      setReserveReceiptFile(null);
+      setReserveReceiptPreview(null);
+      resetSale();
+      navigate({ to: "/reservations" });
+    } catch (e: any) {
+      toast.error(e.message ?? "Hindi na-save ang reservation");
+    } finally {
+      setReserving(false);
+    }
+  }
+
   return (
     <PageShell title="POS" subtitle="Point of sale checkout.">
       {/* Toolbar */}
@@ -490,15 +636,88 @@ function POSPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_600px] gap-5">
         {/* Catalog */}
         <div className="rounded-2xl bg-card border border-border shadow-soft p-4">
+          {/* Tab toggle: Products / Promos */}
+          <div className="flex items-center gap-1 mb-3 bg-secondary/50 rounded-xl p-1 w-fit">
+            <button
+              onClick={() => setShowPromos(false)}
+              className={`h-8 px-4 rounded-lg text-xs font-semibold transition-colors ${!showPromos ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Products
+            </button>
+            <button
+              onClick={() => setShowPromos(true)}
+              className={`h-8 px-4 rounded-lg text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${showPromos ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <Tag className="h-3.5 w-3.5" />
+              Promos
+              {activePromos.length > 0 && (
+                <span className="inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                  {activePromos.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {showPromos ? (
+            /* ---- PROMOS CATALOG ---- */
+            activePromos.length === 0 ? (
+              <div className="text-center py-16 text-muted-foreground text-sm">
+                <Tag className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                Walang active promos. Gumawa sa Promotions page.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[70vh] overflow-y-auto pr-1">
+                {activePromos.map((p: any) => (
+                  <motion.button
+                    key={p.id}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => addPromoToCart(p)}
+                    className="text-left rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 p-3 hover:border-primary/40 transition"
+                  >
+                    {p.image_url ? (
+                      <img src={p.image_url} alt={p.name} className="w-full h-24 object-cover rounded-lg mb-2 border border-border" />
+                    ) : (
+                      <div className="w-full h-24 rounded-lg bg-secondary/60 mb-2 flex items-center justify-center">
+                        <Tag className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="text-xs font-semibold line-clamp-2">{p.name}</div>
+                    {p.description && (
+                      <div className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{p.description}</div>
+                    )}
+                    {p.inclusions?.length > 0 && (
+                      <div className="mt-1.5 space-y-0.5">
+                        {(p.inclusions as string[]).slice(0, 3).map((inc, i) => (
+                          <div key={i} className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <span className="h-1 w-1 rounded-full bg-primary/60 shrink-0" />
+                            {inc}
+                          </div>
+                        ))}
+                        {p.inclusions.length > 3 && (
+                          <div className="text-[10px] text-muted-foreground">+{p.inclusions.length - 3} more…</div>
+                        )}
+                      </div>
+                    )}
+                    <div className="mt-2 flex items-baseline gap-2">
+                      <span className="text-sm font-bold text-primary">{peso(Number(p.promo_price))}</span>
+                      <span className="text-[11px] line-through text-muted-foreground">{peso(Number(p.original_price))}</span>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            )
+          ) : (
+          /* ---- PRODUCTS CATALOG ---- */
+          <>
           <div className="relative mb-4">
             <ScanBarcode className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleBarcodeEnter}
-              placeholder="Scan barcode or search by name / SKU…"
+              placeholder="Search by brand, variant, size…"
               className="w-full h-11 pl-9 pr-3 rounded-xl border border-border bg-background text-sm"
             />
           </div>
@@ -510,6 +729,8 @@ function POSPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[70vh] overflow-y-auto pr-1">
               {filtered.map((p: any) => {
                 const oldestStock = earliestExpiryByProduct[p.id];
+                const stock = stockByProduct[p.id] ?? 0;
+                const oos = stock <= 0;
                 let badgeTone = "bg-secondary text-muted-foreground border-border";
                 if (oldestStock) {
                   const days = Math.round((new Date(oldestStock).getTime() - Date.now()) / 86400000);
@@ -519,21 +740,31 @@ function POSPage() {
                 <motion.button
                   key={p.id} whileTap={{ scale: 0.97 }}
                   onClick={() => addToCart(p)}
-                  className="text-left rounded-xl border border-border bg-background p-3 hover:border-foreground/30 transition"
+                  className={`text-left rounded-xl border p-3 transition ${
+                    oos
+                      ? "border-rose-100 bg-rose-50/40 opacity-60"
+                      : "border-border bg-background hover:border-foreground/30"
+                  }`}
                 >
                   <div className="aspect-square rounded-lg bg-secondary/60 mb-2 flex items-center justify-center text-xs text-muted-foreground overflow-hidden">
                     {p.image_url ? <img src={p.image_url} className="w-full h-full object-cover" /> : p.sku}
                   </div>
                   <div className="text-xs font-semibold line-clamp-2">{p.name}</div>
                   <div className="text-sm font-bold mt-1">{peso(Number(p.retail_price ?? p.base_price ?? 0))}</div>
-                  {oldestStock && (
+                  {oos ? (
+                    <div className="mt-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border inline-flex items-center gap-1 bg-rose-50 text-rose-600 border-rose-100">
+                      <Package className="h-2.5 w-2.5 shrink-0" />Out of stock
+                    </div>
+                  ) : oldestStock ? (
                     <div className={`mt-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border inline-flex items-center gap-1 ${badgeTone}`} title="Sell this batch first (FIFO/FEFO) — oldest stock on hand">
                       <CalendarClock className="h-2.5 w-2.5 shrink-0" />Sell first · {new Date(oldestStock).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
                     </div>
-                  )}
+                  ) : null}
                 </motion.button>
               );})}
             </div>
+          )}
+          </>
           )}
         </div>
 
@@ -559,21 +790,58 @@ function POSPage() {
 
           {/* Walk-in details — only when no registered customer is selected */}
           {!customerId && (
-            <div className="mb-3 rounded-lg border border-dashed border-border p-2.5 space-y-1.5 bg-secondary/30">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Walk-in details (optional)</div>
+            <div className="mb-3 rounded-lg border border-dashed border-amber-300 p-2.5 space-y-1.5 bg-amber-50/40">
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] uppercase tracking-wider text-amber-700 font-semibold">Walk-in details</div>
+                <div className="text-[10px] text-amber-600">Email + phone → mapupunta sa marketing list</div>
+              </div>
               <input value={walkInName} onChange={(e) => setWalkInName(e.target.value)}
-                placeholder="Customer name" className="w-full h-8 px-2 rounded border border-border text-xs bg-background" />
+                placeholder="Pangalan ng customer" className="w-full h-8 px-2 rounded border border-border text-xs bg-background" />
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="relative">
+                  <Mail className="h-3 w-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={walkInEmail} onChange={(e) => setWalkInEmail(e.target.value)}
+                    type="email" placeholder="Email address"
+                    className={`w-full h-8 pl-6 pr-2 rounded border text-xs bg-background ${walkInName && !walkInEmail ? "border-amber-400 bg-amber-50" : "border-border"}`}
+                  />
+                </div>
+                <div className="relative">
+                  <Phone className="h-3 w-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={walkInPhone} onChange={(e) => setWalkInPhone(e.target.value)}
+                    type="tel" placeholder="Phone / Mobile"
+                    className={`w-full h-8 pl-6 pr-2 rounded border text-xs bg-background ${walkInName && !walkInPhone ? "border-amber-400 bg-amber-50" : "border-border"}`}
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-1.5">
                 <div className="relative">
                   <Car className="h-3 w-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input value={walkInVehicle} onChange={(e) => setWalkInVehicle(e.target.value)}
-                    placeholder="Vehicle (e.g. Toyota Vios)" className="w-full h-8 pl-6 pr-2 rounded border border-border text-xs bg-background" />
+                    placeholder="Sasakyan (e.g. Toyota Vios)" className="w-full h-8 pl-6 pr-2 rounded border border-border text-xs bg-background" />
                 </div>
                 <input value={walkInPlate} onChange={(e) => setWalkInPlate(e.target.value.toUpperCase())}
                   placeholder="Plate No." className="h-8 px-2 rounded border border-border text-xs bg-background font-mono uppercase" />
               </div>
             </div>
           )}
+
+          {/* Registered customer missing contact info */}
+          {customerId && (() => {
+            const cust = (customers as any[]).find((c) => c.id === customerId);
+            const missingEmail = !cust?.email;
+            const missingPhone = !cust?.phone;
+            if (!missingEmail && !missingPhone) return null;
+            return (
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800 flex items-start gap-1.5">
+                <span className="shrink-0 mt-0.5">⚠</span>
+                <span>
+                  Customer walang {[missingEmail && "email", missingPhone && "phone"].filter(Boolean).join(" at ")} — i-update sa <b>Customers page</b> para makapasok sa marketing list.
+                </span>
+              </div>
+            );
+          })()}
 
           {pendingOrderId && (
             <div className="mb-3 text-[11px] rounded-lg bg-amber-50 border border-amber-200 text-amber-800 px-2.5 py-1.5">
@@ -690,8 +958,16 @@ function POSPage() {
           )}
 
           <button disabled={processing || cart.length === 0 || (requestedDiscount > 0 && !discountApproved) || (method !== "cash" && !paymentReference.trim())} onClick={checkout}
-            className="mt-3 h-11 rounded-xl bg-primary text-primary-foreground font-semibold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50 shadow-soft hover:opacity-95">
+            className="mt-3 h-11 w-full rounded-xl bg-primary text-primary-foreground font-semibold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50 shadow-soft hover:opacity-95">
             <Check className="h-4 w-4" />{processing ? "Processing..." : `Charge ${peso(total)}`}
+          </button>
+
+          <button
+            disabled={cart.length === 0}
+            onClick={() => { if (cart.length === 0) return toast.error("Magdagdag muna ng items sa cart bago mag-reserve"); setShowReserve(true); }}
+            className="mt-2 h-10 w-full rounded-xl border border-amber-300 bg-amber-50 text-amber-800 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-amber-100 disabled:opacity-40"
+          >
+            <BookmarkPlus className="h-4 w-4" />Reserve
           </button>
 
           <div className="grid grid-cols-2 gap-2 mt-2">
@@ -886,6 +1162,137 @@ function POSPage() {
               ))}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Reservation Dialog */}
+      <Dialog open={showReserve} onOpenChange={(o) => { if (!reserving) { setShowReserve(o); if (!o) { setReserveReceiptFile(null); setReserveReceiptPreview(null); } } }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><BookmarkPlus className="h-5 w-5 text-amber-600" />Mag-Reserve</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            {/* Cart preview */}
+            <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-1">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">Reserved Items / Services</div>
+              {cart.map((it) => (
+                <div key={it.id} className="flex justify-between text-xs">
+                  <span className="truncate flex-1">{it.name} × {it.qty}</span>
+                  <span className="font-semibold ml-2">{peso(it.price * it.qty)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between text-xs font-bold border-t border-border pt-1.5 mt-1.5">
+                <span>Subtotal</span><span>{peso(subtotal)}</span>
+              </div>
+            </div>
+
+            {/* Customer Name */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Customer Name *</label>
+              <input
+                value={reserveForm.customerName}
+                onChange={(e) => setReserveForm((f) => ({ ...f, customerName: e.target.value }))}
+                placeholder="Buong pangalan ng customer"
+                className="mt-1 w-full h-10 px-3 rounded-lg border border-border text-sm bg-background"
+              />
+            </div>
+
+            {/* Vehicle */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sasakyan *</label>
+              <div className="relative mt-1">
+                <Car className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={reserveForm.vehicle}
+                  onChange={(e) => setReserveForm((f) => ({ ...f, vehicle: e.target.value }))}
+                  placeholder="e.g. Toyota Vios 2020"
+                  className="w-full h-10 pl-9 pr-3 rounded-lg border border-border text-sm bg-background"
+                />
+              </div>
+            </div>
+
+            {/* Plate Number */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Plate Number *</label>
+              <input
+                value={reserveForm.plateNumber}
+                onChange={(e) => setReserveForm((f) => ({ ...f, plateNumber: e.target.value.toUpperCase() }))}
+                placeholder="e.g. ABC 1234"
+                className="mt-1 w-full h-10 px-3 rounded-lg border border-border text-sm bg-background font-mono uppercase"
+              />
+            </div>
+
+            {/* Down Payment */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Down Payment Amount *</label>
+              <input
+                type="number" min={1} step="0.01"
+                value={reserveForm.downPayment}
+                onChange={(e) => setReserveForm((f) => ({ ...f, downPayment: e.target.value }))}
+                placeholder="0.00"
+                className="mt-1 w-full h-10 px-3 rounded-lg border border-border text-sm bg-background"
+              />
+            </div>
+
+            {/* Receipt Upload */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Larawan ng Down Payment Receipt *</label>
+              <input
+                ref={reserveFileRef}
+                type="file" accept="image/*" className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  setReserveReceiptFile(f);
+                  if (f) {
+                    const url = URL.createObjectURL(f);
+                    setReserveReceiptPreview(url);
+                  } else {
+                    setReserveReceiptPreview(null);
+                  }
+                }}
+              />
+              {reserveReceiptPreview ? (
+                <div className="mt-1 relative">
+                  <img src={reserveReceiptPreview} alt="Receipt preview" className="w-full max-h-48 object-contain rounded-lg border border-border" />
+                  <button
+                    onClick={() => { setReserveReceiptFile(null); setReserveReceiptPreview(null); if (reserveFileRef.current) reserveFileRef.current.value = ""; }}
+                    className="absolute top-1 right-1 h-6 w-6 rounded-full bg-rose-600 text-white inline-flex items-center justify-center"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => reserveFileRef.current?.click()}
+                  className="mt-1 w-full h-20 rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground inline-flex flex-col items-center justify-center gap-1 hover:border-foreground/30 hover:bg-secondary/40 transition"
+                >
+                  <Upload className="h-4 w-4" />
+                  <span>I-click para mag-upload ng larawan</span>
+                </button>
+              )}
+            </div>
+
+            {/* Notes (optional) */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Notes (optional)</label>
+              <textarea
+                value={reserveForm.notes}
+                onChange={(e) => setReserveForm((f) => ({ ...f, notes: e.target.value }))}
+                placeholder="Dagdag na impormasyon…"
+                rows={2}
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-border text-sm bg-background resize-none"
+              />
+            </div>
+
+            <button
+              onClick={submitReservation}
+              disabled={reserving}
+              className="w-full h-11 rounded-xl bg-amber-600 text-white font-semibold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-amber-700"
+            >
+              <BookmarkPlus className="h-4 w-4" />
+              {reserving ? "Sine-save…" : "I-save ang Reservation"}
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 

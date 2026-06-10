@@ -548,3 +548,6 @@ export const useReferrals = () =>
     select: "*",
     order: { column: "created_at", ascending: false },
   });
+
+export const useReservations = () =>
+  useList<any>("reservations", { order: { column: "created_at", ascending: false } });

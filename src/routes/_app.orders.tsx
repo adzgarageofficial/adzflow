@@ -98,7 +98,7 @@ function Orders() {
             ) : filtered.length === 0 ? (
               <tr><td colSpan={7} className="px-6 py-10 text-center text-muted-foreground">No orders yet. Process a sale in POS.</td></tr>
             ) : filtered.map((o: any) => (
-              <tr key={o.id} className="border-t border-border hover:bg-secondary/40">
+              <tr key={o.id} onClick={() => setSelectedId(o.id)} className="border-t border-border hover:bg-secondary/40 cursor-pointer">
                 <td className="px-6 py-4 font-medium">{o.order_number}</td>
                 <td className="px-6 py-4">{o.customer?.full_name ?? <span className="text-muted-foreground">Walk-in</span>}</td>
                 <td className="px-6 py-4">
@@ -119,7 +119,7 @@ function Orders() {
                 </td>
                 <td className="px-6 py-4 text-muted-foreground text-xs">{new Date(o.created_at).toLocaleString()}</td>
                 <td className="px-6 py-4 text-right font-semibold">{peso(Number(o.total))}</td>
-                <td className="px-6 py-4 text-right">
+                <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-1">
                     {o.status === "pending" && (
                       <button
@@ -179,7 +179,7 @@ function OrderDialog({ orderId, order, onClose, onCancel }: { orderId: string | 
               <Info label="Type" value={FULFILLMENT_META[order.fulfillment_type ?? "takeout"]?.label ?? "Takeout"} />
               <Info label="Total" value={peso(Number(order.total))} />
               <Info label="Subtotal" value={peso(Number(order.subtotal))} />
-              <Info label="Tax" value={peso(Number(order.tax))} />
+
               <Info label="Discount" value={peso(Number(order.discount))} />
             </div>
             <div className="rounded-xl border border-border overflow-hidden">

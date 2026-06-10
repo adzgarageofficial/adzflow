@@ -40,7 +40,9 @@ export type ModuleKey =
   | "reports"
   | "users"
   | "roles"
-  | "settings";
+  | "settings"
+  | "reservations"
+  | "promos";
 
 export type ActionKey = "view" | "create" | "edit" | "delete" | "export" | "approve";
 
@@ -90,6 +92,8 @@ const ALL_MODULES: ModuleKey[] = [
   "notifications",
   "reports",
   "users", "roles", "settings",
+  "reservations",
+  "promos",
 ];
 
 const fullAccess = (): Permissions =>
@@ -118,6 +122,7 @@ export const DEFAULT_ROLES: Role[] = [
       customers: ["view", "create"],
       cashDrawer: ["view", "create", "edit"],
       refunds: ["view", "create"],
+      reservations: ["view", "create", "edit"],
       notifications: ["view"],
     },
   },
@@ -145,6 +150,7 @@ export const DEFAULT_ROLES: Role[] = [
     id: "marketing", name: "Marketing Staff", system: true,
     description: "Marketing campaigns, ecommerce and customers.",
     permissions: {
+      promos: ["view", "create", "edit", "delete"],
       marketing: ["view", "create", "edit"],
       ecommerce: ["view", "create", "edit"],
       customers: ["view", "edit", "export"],
@@ -293,6 +299,8 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   users: "Users",
   roles: "Roles & Permissions",
   settings: "Settings",
+  reservations: "Reservations",
+  promos: "Promotions",
 };
 
 export const ALL_ACTION_KEYS = ALL_ACTIONS;

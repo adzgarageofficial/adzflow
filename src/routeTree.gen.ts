@@ -11,7 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StockCheck4bb144df5336RouteImport } from './routes/stock-check-4bb144df5336'
 import { Route as ServiceQueueRouteImport } from './routes/service-queue'
+import { Route as OilHistoryRouteImport } from './routes/oil-history'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as BayDisplayRouteImport } from './routes/bay-display'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
 import { Route as AppUsersRouteImport } from './routes/_app.users'
@@ -21,11 +23,13 @@ import { Route as AppStockTransfersRouteImport } from './routes/_app.stock-trans
 import { Route as AppShiftsRouteImport } from './routes/_app.shifts'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppRolesRouteImport } from './routes/_app.roles'
+import { Route as AppReservationsRouteImport } from './routes/_app.reservations'
 import { Route as AppReportsRouteImport } from './routes/_app.reports'
 import { Route as AppRefundsRouteImport } from './routes/_app.refunds'
 import { Route as AppRecruitmentRouteImport } from './routes/_app.recruitment'
 import { Route as AppQuotationsRouteImport } from './routes/_app.quotations'
 import { Route as AppPurchaseOrdersRouteImport } from './routes/_app.purchase-orders'
+import { Route as AppPromosRouteImport } from './routes/_app.promos'
 import { Route as AppProductsRouteImport } from './routes/_app.products'
 import { Route as AppPosRouteImport } from './routes/_app.pos'
 import { Route as AppPerformanceRouteImport } from './routes/_app.performance'
@@ -39,8 +43,6 @@ import { Route as AppLoyaltyRouteImport } from './routes/_app.loyalty'
 import { Route as AppLeavesRouteImport } from './routes/_app.leaves'
 import { Route as AppJobOrdersRouteImport } from './routes/_app.job-orders'
 import { Route as AppInventoryRouteImport } from './routes/_app.inventory'
-import { Route as AppGarageRouteImport } from './routes/_app.garage'
-import { Route as AppFitmentRouteImport } from './routes/_app.fitment'
 import { Route as AppFinanceRouteImport } from './routes/_app.finance'
 import { Route as AppFeedbackRouteImport } from './routes/_app.feedback'
 import { Route as AppEmployeesRouteImport } from './routes/_app.employees'
@@ -52,6 +54,7 @@ import { Route as AppCrmRouteImport } from './routes/_app.crm'
 import { Route as AppCashFlowRouteImport } from './routes/_app.cash-flow'
 import { Route as AppCashDrawerRouteImport } from './routes/_app.cash-drawer'
 import { Route as AppBookingsRouteImport } from './routes/_app.bookings'
+import { Route as AppBaysRouteImport } from './routes/_app.bays'
 import { Route as AppAuditLogRouteImport } from './routes/_app.audit-log'
 import { Route as AppAttendanceRouteImport } from './routes/_app.attendance'
 import { Route as AppAnalyticsRouteImport } from './routes/_app.analytics'
@@ -72,9 +75,19 @@ const ServiceQueueRoute = ServiceQueueRouteImport.update({
   path: '/service-queue',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OilHistoryRoute = OilHistoryRouteImport.update({
+  id: '/oil-history',
+  path: '/oil-history',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BayDisplayRoute = BayDisplayRouteImport.update({
+  id: '/bay-display',
+  path: '/bay-display',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -121,6 +134,11 @@ const AppRolesRoute = AppRolesRouteImport.update({
   path: '/roles',
   getParentRoute: () => AppRoute,
 } as any)
+const AppReservationsRoute = AppReservationsRouteImport.update({
+  id: '/reservations',
+  path: '/reservations',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppReportsRoute = AppReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -144,6 +162,11 @@ const AppQuotationsRoute = AppQuotationsRouteImport.update({
 const AppPurchaseOrdersRoute = AppPurchaseOrdersRouteImport.update({
   id: '/purchase-orders',
   path: '/purchase-orders',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPromosRoute = AppPromosRouteImport.update({
+  id: '/promos',
+  path: '/promos',
   getParentRoute: () => AppRoute,
 } as any)
 const AppProductsRoute = AppProductsRouteImport.update({
@@ -211,16 +234,6 @@ const AppInventoryRoute = AppInventoryRouteImport.update({
   path: '/inventory',
   getParentRoute: () => AppRoute,
 } as any)
-const AppGarageRoute = AppGarageRouteImport.update({
-  id: '/garage',
-  path: '/garage',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppFitmentRoute = AppFitmentRouteImport.update({
-  id: '/fitment',
-  path: '/fitment',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppFinanceRoute = AppFinanceRouteImport.update({
   id: '/finance',
   path: '/finance',
@@ -276,6 +289,11 @@ const AppBookingsRoute = AppBookingsRouteImport.update({
   path: '/bookings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppBaysRoute = AppBaysRouteImport.update({
+  id: '/bays',
+  path: '/bays',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAuditLogRoute = AppAuditLogRouteImport.update({
   id: '/audit-log',
   path: '/audit-log',
@@ -324,12 +342,15 @@ const AppMyAttendanceRoute = AppMyAttendanceRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/bay-display': typeof BayDisplayRoute
   '/login': typeof LoginRoute
+  '/oil-history': typeof OilHistoryRoute
   '/service-queue': typeof ServiceQueueRoute
   '/stock-check-4bb144df5336': typeof StockCheck4bb144df5336Route
   '/analytics': typeof AppAnalyticsRoute
   '/attendance': typeof AppAttendanceRoute
   '/audit-log': typeof AppAuditLogRoute
+  '/bays': typeof AppBaysRoute
   '/bookings': typeof AppBookingsRoute
   '/cash-drawer': typeof AppCashDrawerRoute
   '/cash-flow': typeof AppCashFlowRoute
@@ -341,8 +362,6 @@ export interface FileRoutesByFullPath {
   '/employees': typeof AppEmployeesRoute
   '/feedback': typeof AppFeedbackRoute
   '/finance': typeof AppFinanceRoute
-  '/fitment': typeof AppFitmentRoute
-  '/garage': typeof AppGarageRoute
   '/inventory': typeof AppInventoryRoute
   '/job-orders': typeof AppJobOrdersRoute
   '/leaves': typeof AppLeavesRoute
@@ -356,11 +375,13 @@ export interface FileRoutesByFullPath {
   '/performance': typeof AppPerformanceRoute
   '/pos': typeof AppPosRoute
   '/products': typeof AppProductsRoute
+  '/promos': typeof AppPromosRoute
   '/purchase-orders': typeof AppPurchaseOrdersRoute
   '/quotations': typeof AppQuotationsRoute
   '/recruitment': typeof AppRecruitmentRoute
   '/refunds': typeof AppRefundsRoute
   '/reports': typeof AppReportsRoute
+  '/reservations': typeof AppReservationsRoute
   '/roles': typeof AppRolesRoute
   '/settings': typeof AppSettingsRoute
   '/shifts': typeof AppShiftsRoute
@@ -376,12 +397,15 @@ export interface FileRoutesByFullPath {
   '/my/': typeof AppMyIndexRoute
 }
 export interface FileRoutesByTo {
+  '/bay-display': typeof BayDisplayRoute
   '/login': typeof LoginRoute
+  '/oil-history': typeof OilHistoryRoute
   '/service-queue': typeof ServiceQueueRoute
   '/stock-check-4bb144df5336': typeof StockCheck4bb144df5336Route
   '/analytics': typeof AppAnalyticsRoute
   '/attendance': typeof AppAttendanceRoute
   '/audit-log': typeof AppAuditLogRoute
+  '/bays': typeof AppBaysRoute
   '/bookings': typeof AppBookingsRoute
   '/cash-drawer': typeof AppCashDrawerRoute
   '/cash-flow': typeof AppCashFlowRoute
@@ -393,8 +417,6 @@ export interface FileRoutesByTo {
   '/employees': typeof AppEmployeesRoute
   '/feedback': typeof AppFeedbackRoute
   '/finance': typeof AppFinanceRoute
-  '/fitment': typeof AppFitmentRoute
-  '/garage': typeof AppGarageRoute
   '/inventory': typeof AppInventoryRoute
   '/job-orders': typeof AppJobOrdersRoute
   '/leaves': typeof AppLeavesRoute
@@ -408,11 +430,13 @@ export interface FileRoutesByTo {
   '/performance': typeof AppPerformanceRoute
   '/pos': typeof AppPosRoute
   '/products': typeof AppProductsRoute
+  '/promos': typeof AppPromosRoute
   '/purchase-orders': typeof AppPurchaseOrdersRoute
   '/quotations': typeof AppQuotationsRoute
   '/recruitment': typeof AppRecruitmentRoute
   '/refunds': typeof AppRefundsRoute
   '/reports': typeof AppReportsRoute
+  '/reservations': typeof AppReservationsRoute
   '/roles': typeof AppRolesRoute
   '/settings': typeof AppSettingsRoute
   '/shifts': typeof AppShiftsRoute
@@ -431,12 +455,15 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/bay-display': typeof BayDisplayRoute
   '/login': typeof LoginRoute
+  '/oil-history': typeof OilHistoryRoute
   '/service-queue': typeof ServiceQueueRoute
   '/stock-check-4bb144df5336': typeof StockCheck4bb144df5336Route
   '/_app/analytics': typeof AppAnalyticsRoute
   '/_app/attendance': typeof AppAttendanceRoute
   '/_app/audit-log': typeof AppAuditLogRoute
+  '/_app/bays': typeof AppBaysRoute
   '/_app/bookings': typeof AppBookingsRoute
   '/_app/cash-drawer': typeof AppCashDrawerRoute
   '/_app/cash-flow': typeof AppCashFlowRoute
@@ -448,8 +475,6 @@ export interface FileRoutesById {
   '/_app/employees': typeof AppEmployeesRoute
   '/_app/feedback': typeof AppFeedbackRoute
   '/_app/finance': typeof AppFinanceRoute
-  '/_app/fitment': typeof AppFitmentRoute
-  '/_app/garage': typeof AppGarageRoute
   '/_app/inventory': typeof AppInventoryRoute
   '/_app/job-orders': typeof AppJobOrdersRoute
   '/_app/leaves': typeof AppLeavesRoute
@@ -463,11 +488,13 @@ export interface FileRoutesById {
   '/_app/performance': typeof AppPerformanceRoute
   '/_app/pos': typeof AppPosRoute
   '/_app/products': typeof AppProductsRoute
+  '/_app/promos': typeof AppPromosRoute
   '/_app/purchase-orders': typeof AppPurchaseOrdersRoute
   '/_app/quotations': typeof AppQuotationsRoute
   '/_app/recruitment': typeof AppRecruitmentRoute
   '/_app/refunds': typeof AppRefundsRoute
   '/_app/reports': typeof AppReportsRoute
+  '/_app/reservations': typeof AppReservationsRoute
   '/_app/roles': typeof AppRolesRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/shifts': typeof AppShiftsRoute
@@ -487,12 +514,15 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/bay-display'
     | '/login'
+    | '/oil-history'
     | '/service-queue'
     | '/stock-check-4bb144df5336'
     | '/analytics'
     | '/attendance'
     | '/audit-log'
+    | '/bays'
     | '/bookings'
     | '/cash-drawer'
     | '/cash-flow'
@@ -504,8 +534,6 @@ export interface FileRouteTypes {
     | '/employees'
     | '/feedback'
     | '/finance'
-    | '/fitment'
-    | '/garage'
     | '/inventory'
     | '/job-orders'
     | '/leaves'
@@ -519,11 +547,13 @@ export interface FileRouteTypes {
     | '/performance'
     | '/pos'
     | '/products'
+    | '/promos'
     | '/purchase-orders'
     | '/quotations'
     | '/recruitment'
     | '/refunds'
     | '/reports'
+    | '/reservations'
     | '/roles'
     | '/settings'
     | '/shifts'
@@ -539,12 +569,15 @@ export interface FileRouteTypes {
     | '/my/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/bay-display'
     | '/login'
+    | '/oil-history'
     | '/service-queue'
     | '/stock-check-4bb144df5336'
     | '/analytics'
     | '/attendance'
     | '/audit-log'
+    | '/bays'
     | '/bookings'
     | '/cash-drawer'
     | '/cash-flow'
@@ -556,8 +589,6 @@ export interface FileRouteTypes {
     | '/employees'
     | '/feedback'
     | '/finance'
-    | '/fitment'
-    | '/garage'
     | '/inventory'
     | '/job-orders'
     | '/leaves'
@@ -571,11 +602,13 @@ export interface FileRouteTypes {
     | '/performance'
     | '/pos'
     | '/products'
+    | '/promos'
     | '/purchase-orders'
     | '/quotations'
     | '/recruitment'
     | '/refunds'
     | '/reports'
+    | '/reservations'
     | '/roles'
     | '/settings'
     | '/shifts'
@@ -593,12 +626,15 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_app'
+    | '/bay-display'
     | '/login'
+    | '/oil-history'
     | '/service-queue'
     | '/stock-check-4bb144df5336'
     | '/_app/analytics'
     | '/_app/attendance'
     | '/_app/audit-log'
+    | '/_app/bays'
     | '/_app/bookings'
     | '/_app/cash-drawer'
     | '/_app/cash-flow'
@@ -610,8 +646,6 @@ export interface FileRouteTypes {
     | '/_app/employees'
     | '/_app/feedback'
     | '/_app/finance'
-    | '/_app/fitment'
-    | '/_app/garage'
     | '/_app/inventory'
     | '/_app/job-orders'
     | '/_app/leaves'
@@ -625,11 +659,13 @@ export interface FileRouteTypes {
     | '/_app/performance'
     | '/_app/pos'
     | '/_app/products'
+    | '/_app/promos'
     | '/_app/purchase-orders'
     | '/_app/quotations'
     | '/_app/recruitment'
     | '/_app/refunds'
     | '/_app/reports'
+    | '/_app/reservations'
     | '/_app/roles'
     | '/_app/settings'
     | '/_app/shifts'
@@ -648,7 +684,9 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  BayDisplayRoute: typeof BayDisplayRoute
   LoginRoute: typeof LoginRoute
+  OilHistoryRoute: typeof OilHistoryRoute
   ServiceQueueRoute: typeof ServiceQueueRoute
   StockCheck4bb144df5336Route: typeof StockCheck4bb144df5336Route
 }
@@ -669,11 +707,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServiceQueueRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/oil-history': {
+      id: '/oil-history'
+      path: '/oil-history'
+      fullPath: '/oil-history'
+      preLoaderRoute: typeof OilHistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bay-display': {
+      id: '/bay-display'
+      path: '/bay-display'
+      fullPath: '/bay-display'
+      preLoaderRoute: typeof BayDisplayRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app': {
@@ -739,6 +791,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRolesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/reservations': {
+      id: '/_app/reservations'
+      path: '/reservations'
+      fullPath: '/reservations'
+      preLoaderRoute: typeof AppReservationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/reports': {
       id: '/_app/reports'
       path: '/reports'
@@ -772,6 +831,13 @@ declare module '@tanstack/react-router' {
       path: '/purchase-orders'
       fullPath: '/purchase-orders'
       preLoaderRoute: typeof AppPurchaseOrdersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/promos': {
+      id: '/_app/promos'
+      path: '/promos'
+      fullPath: '/promos'
+      preLoaderRoute: typeof AppPromosRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/products': {
@@ -865,20 +931,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInventoryRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/garage': {
-      id: '/_app/garage'
-      path: '/garage'
-      fullPath: '/garage'
-      preLoaderRoute: typeof AppGarageRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/fitment': {
-      id: '/_app/fitment'
-      path: '/fitment'
-      fullPath: '/fitment'
-      preLoaderRoute: typeof AppFitmentRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/finance': {
       id: '/_app/finance'
       path: '/finance'
@@ -956,6 +1008,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBookingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/bays': {
+      id: '/_app/bays'
+      path: '/bays'
+      fullPath: '/bays'
+      preLoaderRoute: typeof AppBaysRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/audit-log': {
       id: '/_app/audit-log'
       path: '/audit-log'
@@ -1026,6 +1085,7 @@ interface AppRouteChildren {
   AppAnalyticsRoute: typeof AppAnalyticsRoute
   AppAttendanceRoute: typeof AppAttendanceRoute
   AppAuditLogRoute: typeof AppAuditLogRoute
+  AppBaysRoute: typeof AppBaysRoute
   AppBookingsRoute: typeof AppBookingsRoute
   AppCashDrawerRoute: typeof AppCashDrawerRoute
   AppCashFlowRoute: typeof AppCashFlowRoute
@@ -1037,8 +1097,6 @@ interface AppRouteChildren {
   AppEmployeesRoute: typeof AppEmployeesRoute
   AppFeedbackRoute: typeof AppFeedbackRoute
   AppFinanceRoute: typeof AppFinanceRoute
-  AppFitmentRoute: typeof AppFitmentRoute
-  AppGarageRoute: typeof AppGarageRoute
   AppInventoryRoute: typeof AppInventoryRoute
   AppJobOrdersRoute: typeof AppJobOrdersRoute
   AppLeavesRoute: typeof AppLeavesRoute
@@ -1052,11 +1110,13 @@ interface AppRouteChildren {
   AppPerformanceRoute: typeof AppPerformanceRoute
   AppPosRoute: typeof AppPosRoute
   AppProductsRoute: typeof AppProductsRoute
+  AppPromosRoute: typeof AppPromosRoute
   AppPurchaseOrdersRoute: typeof AppPurchaseOrdersRoute
   AppQuotationsRoute: typeof AppQuotationsRoute
   AppRecruitmentRoute: typeof AppRecruitmentRoute
   AppRefundsRoute: typeof AppRefundsRoute
   AppReportsRoute: typeof AppReportsRoute
+  AppReservationsRoute: typeof AppReservationsRoute
   AppRolesRoute: typeof AppRolesRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppShiftsRoute: typeof AppShiftsRoute
@@ -1077,6 +1137,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAnalyticsRoute: AppAnalyticsRoute,
   AppAttendanceRoute: AppAttendanceRoute,
   AppAuditLogRoute: AppAuditLogRoute,
+  AppBaysRoute: AppBaysRoute,
   AppBookingsRoute: AppBookingsRoute,
   AppCashDrawerRoute: AppCashDrawerRoute,
   AppCashFlowRoute: AppCashFlowRoute,
@@ -1088,8 +1149,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppEmployeesRoute: AppEmployeesRoute,
   AppFeedbackRoute: AppFeedbackRoute,
   AppFinanceRoute: AppFinanceRoute,
-  AppFitmentRoute: AppFitmentRoute,
-  AppGarageRoute: AppGarageRoute,
   AppInventoryRoute: AppInventoryRoute,
   AppJobOrdersRoute: AppJobOrdersRoute,
   AppLeavesRoute: AppLeavesRoute,
@@ -1103,11 +1162,13 @@ const AppRouteChildren: AppRouteChildren = {
   AppPerformanceRoute: AppPerformanceRoute,
   AppPosRoute: AppPosRoute,
   AppProductsRoute: AppProductsRoute,
+  AppPromosRoute: AppPromosRoute,
   AppPurchaseOrdersRoute: AppPurchaseOrdersRoute,
   AppQuotationsRoute: AppQuotationsRoute,
   AppRecruitmentRoute: AppRecruitmentRoute,
   AppRefundsRoute: AppRefundsRoute,
   AppReportsRoute: AppReportsRoute,
+  AppReservationsRoute: AppReservationsRoute,
   AppRolesRoute: AppRolesRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppShiftsRoute: AppShiftsRoute,
@@ -1128,7 +1189,9 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  BayDisplayRoute: BayDisplayRoute,
   LoginRoute: LoginRoute,
+  OilHistoryRoute: OilHistoryRoute,
   ServiceQueueRoute: ServiceQueueRoute,
   StockCheck4bb144df5336Route: StockCheck4bb144df5336Route,
 }

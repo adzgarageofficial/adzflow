@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
+import adzLogo from "@/assets/adz-logo.png";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -164,7 +165,7 @@ function PayrollPage() {
             sss: breakdown.sss,
             philhealth: breakdown.philhealth,
             pagibig: breakdown.pagibig,
-            withholding_tax: breakdown.withholdingTax,
+            withholding_tax: 0,
             late_deduction: breakdown.lateDeduction,
             total_deductions: breakdown.totalDeductions,
             net_pay: breakdown.netPay,
@@ -244,7 +245,7 @@ function PayrollPage() {
   return (
     <PageShell
       title="Payroll"
-      subtitle="Semi-monthly payroll (15th & 30th) — auto-compute SSS, PhilHealth, Pag-IBIG, BIR tax."
+      subtitle="Semi-monthly payroll (15th & 30th) — auto-compute SSS, PhilHealth, Pag-IBIG."
       actions={
         <button
           onClick={() => setOpenNew(true)}
@@ -378,7 +379,7 @@ function PayrollPage() {
                       </tr>
                     ) : (
                       payslips.map((s: any) => (
-                        <tr key={s.id} className="border-t border-border/50 hover:bg-secondary/30">
+                        <tr key={s.id} onClick={() => setOpenSlip(s)} className="border-t border-border/50 hover:bg-secondary/30 cursor-pointer">
                           <td className="p-3">
                             <div className="font-medium">{s.employee?.first_name} {s.employee?.last_name}</div>
                             <div className="text-[10px] text-muted-foreground font-mono">{s.employee?.employee_number}</div>
@@ -543,29 +544,205 @@ function PayslipView({ slip, onClose }: { slip: any; onClose: () => void }) {
   const emp = slip.employee || {};
   const period = slip.period || {};
 
-  const handlePrint = () => {
-    const html = document.getElementById(`payslip-${slip.id}`)?.outerHTML;
-    if (!html) return;
-    const w = window.open("", "_blank", "width=800,height=900");
+  const handlePrint = async () => {
+    const emp = slip.employee || {};
+    const period = slip.period || {};
+    const p = (n: number) => `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    // Convert logo to data URL so the print window can display it
+    let logoDataUrl = "";
+    try {
+      const res = await fetch(adzLogo);
+      const blob = await res.blob();
+      logoDataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+    } catch { /* fall back to text badge if logo fails */ }
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${slip.payslip_number}</title>
+  <style>
+    @page { size: A4; margin: 20mm 18mm 18mm 18mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #1a1a1a; background: #fff; }
+
+    /* ── Header / Logo ── */
+    .logo-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 3px solid #dc2626; padding-bottom: 10px; margin-bottom: 14px;
+    }
+    .logo-left { display: flex; align-items: center; gap: 12px; }
+    .logo-badge {
+      width: 48px; height: 48px; border-radius: 10px;
+      background: #dc2626; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 900; letter-spacing: -1px;
+    }
+    .logo-text h1 { font-size: 18pt; font-weight: 900; color: #dc2626; letter-spacing: 1px; line-height: 1; }
+    .logo-text p { font-size: 8pt; color: #666; margin-top: 2px; letter-spacing: 0.5px; }
+    .logo-right { text-align: right; }
+    .logo-right .slip-no { font-size: 12pt; font-weight: 700; font-family: monospace; color: #222; }
+    .logo-right .pay-date { font-size: 8.5pt; color: #888; margin-top: 2px; }
+
+    /* ── Document title bar ── */
+    .doc-title {
+      background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px;
+      text-align: center; padding: 6px; margin-bottom: 14px;
+      font-size: 9pt; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #555;
+    }
+
+    /* ── Two-column info grid ── */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
+    .info-box h3 {
+      font-size: 7.5pt; text-transform: uppercase; letter-spacing: 1.5px; color: #888;
+      border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; margin-bottom: 6px; font-weight: 600;
+    }
+    .info-row { display: flex; justify-content: space-between; font-size: 9.5pt; padding: 2px 0; }
+    .info-row .lbl { color: #666; }
+    .info-row .val { font-weight: 600; color: #111; }
+    .emp-name { font-size: 12pt; font-weight: 800; color: #111; margin-bottom: 2px; }
+    .emp-no { font-size: 8.5pt; color: #888; font-family: monospace; }
+    .govt-row { font-size: 8.5pt; color: #555; padding: 1.5px 0; }
+
+    /* ── Pay tables ── */
+    .pay-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
+    .pay-section h3 {
+      font-size: 7.5pt; text-transform: uppercase; letter-spacing: 1.5px; color: #888;
+      border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; margin-bottom: 6px; font-weight: 600;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 3px 0; font-size: 9.5pt; }
+    td.amt { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+    tr.subtotal td { border-top: 1px solid #e5e7eb; font-weight: 700; padding-top: 5px; }
+    tr.subtotal td.amt { color: #1d4ed8; }
+    tr.ded-total td { border-top: 1px solid #e5e7eb; font-weight: 700; padding-top: 5px; }
+    tr.ded-total td.amt { color: #b45309; }
+
+    /* ── Net pay banner ── */
+    .net-banner {
+      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+      color: #fff; border-radius: 8px; padding: 14px 20px;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 14px;
+    }
+    .net-banner .lbl { font-size: 8pt; opacity: 0.85; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 2px; }
+    .net-banner .due { font-size: 8.5pt; opacity: 0.75; }
+    .net-banner .amount { font-size: 22pt; font-weight: 900; letter-spacing: -0.5px; }
+
+    /* ── Signature block ── */
+    .sig-block {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 10px;
+    }
+    .sig-line { border-top: 1px solid #bbb; padding-top: 4px; margin-top: 30px; font-size: 8.5pt; color: #555; text-align: center; }
+
+    /* ── Footer ── */
+    .footer { margin-top: 14px; border-top: 1px solid #e5e7eb; padding-top: 6px; text-align: center; font-size: 7.5pt; color: #aaa; }
+  </style>
+</head>
+<body>
+
+  <div class="logo-bar">
+    <div class="logo-left">
+      ${logoDataUrl
+        ? `<img src="${logoDataUrl}" alt="ADZ Garage" style="height:52px;width:auto;object-fit:contain;border-radius:8px;" />`
+        : `<div class="logo-badge">ADZ</div>`}
+      <div class="logo-text">
+        <h1>ADZ GARAGE</h1>
+        <p>ENTERPRISE SUITE · PAYROLL &amp; COMPENSATION</p>
+      </div>
+    </div>
+    <div class="logo-right">
+      <div class="slip-no">${slip.payslip_number}</div>
+      <div class="pay-date">Pay Date: ${period.pay_date ?? "—"}</div>
+    </div>
+  </div>
+
+  <div class="doc-title">PAYSLIP / EARNINGS STATEMENT</div>
+
+  <div class="info-grid">
+    <div class="info-box">
+      <h3>Employee</h3>
+      <div class="emp-name">${emp.first_name ?? ""} ${emp.last_name ?? ""}</div>
+      <div class="emp-no">#${emp.employee_number ?? "—"}</div>
+      <div style="margin-top:6px;">
+        ${emp.tin_number ? `<div class="govt-row">TIN: ${emp.tin_number}</div>` : ""}
+        ${emp.sss_number ? `<div class="govt-row">SSS: ${emp.sss_number}</div>` : ""}
+        ${emp.philhealth_number ? `<div class="govt-row">PhilHealth: ${emp.philhealth_number}</div>` : ""}
+        ${emp.pagibig_number ? `<div class="govt-row">Pag-IBIG: ${emp.pagibig_number}</div>` : ""}
+        ${emp.bank_name ? `<div class="govt-row">Bank: ${emp.bank_name} · ${emp.bank_account_number ?? "—"}</div>` : ""}
+      </div>
+    </div>
+    <div class="info-box">
+      <h3>Pay Period</h3>
+      <div class="info-row"><span class="lbl">Period</span><span class="val">${period.period_start ?? ""} → ${period.period_end ?? ""}</span></div>
+      <div class="info-row"><span class="lbl">Cutoff</span><span class="val">${period.cutoff_label ?? ""}</span></div>
+      <div class="info-row"><span class="lbl">Days Worked</span><span class="val">${Number(slip.days_worked).toFixed(1)}</span></div>
+      <div class="info-row"><span class="lbl">Regular Hours</span><span class="val">${Number(slip.regular_hours).toFixed(2)}</span></div>
+      <div class="info-row"><span class="lbl">OT Hours</span><span class="val">${Number(slip.overtime_hours).toFixed(2)}</span></div>
+      <div class="info-row"><span class="lbl">Late (min)</span><span class="val">${Number(slip.late_minutes ?? 0)}</span></div>
+    </div>
+  </div>
+
+  <div class="pay-grid">
+    <div class="pay-section">
+      <h3>Earnings</h3>
+      <table>
+        <tr><td>Basic Pay</td><td class="amt">${p(slip.basic_pay)}</td></tr>
+        <tr><td>Allowance</td><td class="amt">${p(slip.allowance)}</td></tr>
+        <tr><td>Overtime Pay</td><td class="amt">${p(slip.overtime_pay)}</td></tr>
+        ${Number(slip.commission) > 0 ? `<tr><td>Commission</td><td class="amt">${p(slip.commission)}</td></tr>` : ""}
+        ${Number(slip.holiday_pay) > 0 ? `<tr><td>Holiday Pay</td><td class="amt">${p(slip.holiday_pay)}</td></tr>` : ""}
+        ${Number(slip.other_earnings) > 0 ? `<tr><td>Other Earnings</td><td class="amt">${p(slip.other_earnings)}</td></tr>` : ""}
+        <tr class="subtotal"><td>Gross Pay</td><td class="amt">${p(slip.gross_pay)}</td></tr>
+      </table>
+    </div>
+    <div class="pay-section">
+      <h3>Deductions</h3>
+      <table>
+        <tr><td>SSS</td><td class="amt">${p(slip.sss)}</td></tr>
+        <tr><td>PhilHealth</td><td class="amt">${p(slip.philhealth)}</td></tr>
+        <tr><td>Pag-IBIG</td><td class="amt">${p(slip.pagibig)}</td></tr>
+        ${Number(slip.late_deduction) > 0 ? `<tr><td>Late / Undertime</td><td class="amt">${p(slip.late_deduction)}</td></tr>` : ""}
+        ${Number(slip.other_deductions) > 0 ? `<tr><td>Other</td><td class="amt">${p(slip.other_deductions)}</td></tr>` : ""}
+        <tr class="ded-total"><td>Total Deductions</td><td class="amt">${p(slip.total_deductions)}</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="net-banner">
+    <div>
+      <div class="lbl">Net Pay</div>
+      <div class="due">Amount payable on ${period.pay_date ?? "—"}</div>
+    </div>
+    <div class="amount">${p(slip.net_pay)}</div>
+  </div>
+
+  <div class="sig-block">
+    <div>
+      <div class="sig-line">Prepared by / HR Officer</div>
+    </div>
+    <div>
+      <div class="sig-line">Received by / ${emp.first_name ?? "Employee"} ${emp.last_name ?? ""}</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    System-generated payslip · ADZ Garage Enterprise Suite · ${slip.payslip_number} · ${new Date().toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })}
+  </div>
+
+</body>
+</html>`;
+
+    const w = window.open("", "_blank", "width=820,height=1050");
     if (!w) return;
-    w.document.write(`
-      <html><head><title>${slip.payslip_number}</title>
-      <style>
-        body{font-family:system-ui,sans-serif;padding:24px;color:#111;background:#fff;}
-        .h{display:flex;justify-content:space-between;border-bottom:2px solid #dc2626;padding-bottom:12px;margin-bottom:16px;}
-        .h h1{margin:0;font-size:20px;color:#dc2626;letter-spacing:.06em;}
-        .grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:16px;}
-        table{width:100%;border-collapse:collapse;margin-top:8px;}
-        td{padding:6px 0;font-size:13px;}
-        td.r{text-align:right;font-variant-numeric:tabular-nums;}
-        h3{margin:16px 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.15em;color:#666;border-bottom:1px solid #ddd;padding-bottom:4px;}
-        .net{background:#dc2626;color:#fff;padding:16px;margin-top:16px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;}
-        .net .v{font-size:24px;font-weight:700;}
-        .meta{font-size:11px;color:#666;}
-      </style></head><body>${html}</body></html>
-    `);
+    w.document.write(html);
     w.document.close();
-    w.print();
+    w.onload = () => w.print();
   };
 
   return (
@@ -662,7 +839,7 @@ function PayslipView({ slip, onClose }: { slip: any; onClose: () => void }) {
                 <PayRow label="SSS" value={slip.sss} />
                 <PayRow label="PhilHealth" value={slip.philhealth} />
                 <PayRow label="Pag-IBIG" value={slip.pagibig} />
-                <PayRow label="Withholding Tax" value={slip.withholding_tax} />
+
                 {Number(slip.late_deduction) > 0 && <PayRow label="Late / Undertime" value={slip.late_deduction} />}
                 {Number(slip.other_deductions) > 0 && <PayRow label="Other" value={slip.other_deductions} />}
                 <tr className="border-t border-border">
