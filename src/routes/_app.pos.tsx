@@ -991,7 +991,7 @@ function POSPage() {
               <div id="pos-receipt-print" className="space-y-3 text-sm bg-white text-black p-3 rounded">
                 <div className="text-center">
                   <div className="font-extrabold text-base tracking-tight">ADZ GARAGE</div>
-                  <div className="text-[10px] text-muted-foreground">Official Receipt</div>
+                  <div className="text-[10px] text-muted-foreground">Delivery Receipt</div>
                   <div className="text-[11px] mt-1">{receipt.order_number}</div>
                   <div className="text-[10px] text-muted-foreground">{new Date().toLocaleString()}</div>
                   {receipt.fulfillment && receipt.fulfillment !== "takeout" && (
