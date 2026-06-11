@@ -9,19 +9,10 @@ const inputSchema = z.object({
   email: z.string().email(),
   displayName: z.string().min(1).max(120),
   role: z.enum(APP_ROLES),
+  password: z.string().min(8, "Password must be at least 8 characters"),
   branchId: z.string().uuid().nullable().optional(),
 });
 
-function generateTemporaryPassword() {
-  const bytes = new Uint8Array(12);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(36).padStart(2, "0")).join("").slice(0, 16) + "Az1!";
-}
-
-/**
- * Owner/admin-only: provisions a real login account for a team member and assigns
- * their role in one step, so the person they're inviting can sign in immediately.
- */
 export const createTeamMember = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(inputSchema)
@@ -34,17 +25,11 @@ export const createTeamMember = createServerFn({ method: "POST" })
 
     const roleNames = new Set((callerRoles ?? []).map((r) => r.role));
     const callerIsOwner = roleNames.has("owner");
-    const callerIsStaff = callerIsOwner || roleNames.has("admin");
-    if (!callerIsStaff) throw new Error("Only the owner or an admin can add team members.");
-    if ((data.role === "owner" || data.role === "admin") && !callerIsOwner) {
-      throw new Error("Only the owner can assign the Owner or Admin role.");
-    }
-
-    const temporaryPassword = generateTemporaryPassword();
+    if (!callerIsOwner) throw new Error("Only the owner can create accounts.");
 
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
-      password: temporaryPassword,
+      password: data.password,
       email_confirm: true,
       user_metadata: { display_name: data.displayName },
     });
@@ -62,9 +47,5 @@ export const createTeamMember = createServerFn({ method: "POST" })
       await supabaseAdmin.from("profiles").update({ branch_id: data.branchId }).eq("id", newUserId);
     }
 
-    return {
-      userId: newUserId,
-      email: data.email,
-      temporaryPassword,
-    };
+    return { userId: newUserId, email: data.email };
   });

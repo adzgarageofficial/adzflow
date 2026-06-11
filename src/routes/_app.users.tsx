@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, UserCog, UserPlus, Copy, Check } from "lucide-react";
+import { Search, UserCog, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useProfiles, useUserRoles, useSetUserRole, useBranches, useCurrentUserRoles } from "@/lib/db";
 import { createTeamMember } from "@/lib/team-members";
@@ -67,14 +67,14 @@ function UsersPage() {
             className="flex-1 bg-transparent outline-none text-sm"
           />
         </div>
-        {canEdit ? (
+        {isOwner ? (
           <Button onClick={() => setAddOpen(true)}>
             <UserPlus className="h-4 w-4 mr-1.5" /> Add team member
           </Button>
         ) : (
           <div className="text-xs text-muted-foreground inline-flex items-center gap-1">
             <UserCog className="h-3.5 w-3.5" />
-            New users sign up via Login page
+            Contact the owner to add team members
           </div>
         )}
       </div>
@@ -158,18 +158,16 @@ function AddTeamMemberDialog({ open, onClose, branches, isOwner }: { open: boole
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<string>("cashier");
+  const [password, setPassword] = useState("");
   const [branchId, setBranchId] = useState<string>("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ email: string; temporaryPassword: string } | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const reset = () => {
     setEmail("");
     setDisplayName("");
     setRole("cashier");
+    setPassword("");
     setBranchId("");
-    setResult(null);
-    setCopied(false);
   };
 
   const handleClose = () => {
@@ -179,15 +177,19 @@ function AddTeamMemberDialog({ open, onClose, branches, isOwner }: { open: boole
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
     setBusy(true);
     try {
-      const res = await callCreateTeamMember({
-        data: { email, displayName, role: role as any, branchId: branchId || null },
+      await callCreateTeamMember({
+        data: { email, displayName, role: role as any, password, branchId: branchId || null },
       });
-      setResult(res);
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
       queryClient.invalidateQueries({ queryKey: ["user_roles"] });
-      toast.success("Account created — share the temporary password with them.");
+      toast.success("Account created successfully.");
+      handleClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create the account");
     } finally {
@@ -195,94 +197,55 @@ function AddTeamMemberDialog({ open, onClose, branches, isOwner }: { open: boole
     }
   };
 
-  const copyPassword = async () => {
-    if (!result) return;
-    try {
-      await navigator.clipboard.writeText(result.temporaryPassword);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast.error("Couldn't copy — select and copy manually");
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent className="max-w-md">
-        {result ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>Account created</DialogTitle>
-              <DialogDescription>
-                Share these sign-in details with <span className="font-medium">{result.email}</span>. They can change
-                their password after logging in.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="mt-2 space-y-3">
-              <div>
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Email</Label>
-                <div className="mt-1.5 h-10 rounded-lg border border-border bg-muted/40 px-3 flex items-center text-sm font-medium">
-                  {result.email}
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Temporary password</Label>
-                <div className="mt-1.5 h-10 rounded-lg border border-border bg-muted/40 px-3 flex items-center justify-between gap-2">
-                  <span className="text-sm font-mono font-medium truncate">{result.temporaryPassword}</span>
-                  <Button type="button" size="sm" variant="ghost" onClick={copyPassword} className="h-7 px-2">
-                    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                  </Button>
-                </div>
-              </div>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Add team member</DialogTitle>
+            <DialogDescription>
+              Set the email, password, and role for the new account. Only you can create accounts.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 space-y-4">
+            <div>
+              <Label htmlFor="member-name">Full name</Label>
+              <Input id="member-name" required value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Juan dela Cruz" className="mt-1.5 h-10" />
             </div>
-            <DialogFooter className="mt-4">
-              <Button onClick={handleClose}>Done</Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <DialogHeader>
-              <DialogTitle>Add team member</DialogTitle>
-              <DialogDescription>
-                Pick a role and we'll create a real login account for them — they'll only see what that role allows.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="mt-2 space-y-4">
+            <div>
+              <Label htmlFor="member-email">Email</Label>
+              <Input id="member-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="juan@adzgarage.ph" className="mt-1.5 h-10" />
+            </div>
+            <div>
+              <Label htmlFor="member-password">Password</Label>
+              <Input id="member-password" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" className="mt-1.5 h-10" />
+            </div>
+            <div>
+              <Label>Role</Label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger className="mt-1.5 h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {branches.length > 0 && (
               <div>
-                <Label htmlFor="member-name">Full name</Label>
-                <Input id="member-name" required value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Juan dela Cruz" className="mt-1.5 h-10" />
-              </div>
-              <div>
-                <Label htmlFor="member-email">Email</Label>
-                <Input id="member-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="juan@adzgarage.ph" className="mt-1.5 h-10" />
-              </div>
-              <div>
-                <Label>Role</Label>
-                <Select value={role} onValueChange={setRole}>
-                  <SelectTrigger className="mt-1.5 h-10"><SelectValue /></SelectTrigger>
+                <Label>Branch (optional)</Label>
+                <Select value={branchId} onValueChange={setBranchId}>
+                  <SelectTrigger className="mt-1.5 h-10"><SelectValue placeholder="No branch" /></SelectTrigger>
                   <SelectContent>
-                    {ROLES.filter((r) => isOwner || (r !== "owner" && r !== "admin")).map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              {branches.length > 0 && (
-                <div>
-                  <Label>Branch (optional)</Label>
-                  <Select value={branchId} onValueChange={setBranchId}>
-                    <SelectTrigger className="mt-1.5 h-10"><SelectValue placeholder="No branch" /></SelectTrigger>
-                    <SelectContent>
-                      {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
-            <DialogFooter className="mt-5">
-              <Button type="button" variant="outline" onClick={handleClose} disabled={busy}>Cancel</Button>
-              <Button type="submit" disabled={busy}>{busy ? "Creating…" : "Create account"}</Button>
-            </DialogFooter>
-          </form>
-        )}
+            )}
+          </div>
+          <DialogFooter className="mt-5">
+            <Button type="button" variant="outline" onClick={handleClose} disabled={busy}>Cancel</Button>
+            <Button type="submit" disabled={busy}>{busy ? "Creating…" : "Create account"}</Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
