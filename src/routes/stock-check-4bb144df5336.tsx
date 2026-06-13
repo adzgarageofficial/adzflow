@@ -54,10 +54,10 @@ function StockCheckPage() {
   const debouncedPlate = useDebounced(plate.trim().toUpperCase(), 400);
 
   // Cart
-  const [cart, setCart]       = useState<CartLine[]>([]);
-  const [discount, setDiscount] = useState(0);
-  const [notes, setNotes]     = useState("");
-  const [showCart, setShowCart] = useState(false);
+  const [cart, setCart]           = useState<CartLine[]>([]);
+  const [discount, setDiscount]   = useState(0);
+  const [notes, setNotes]         = useState("");
+  const [showCartPanel, setShowCartPanel] = useState(false);
 
   // Print preview
   const [showPrint, setShowPrint] = useState(false);
@@ -106,12 +106,10 @@ function StockCheckPage() {
       if (ex) return prev.map((x) => x.product_id === r.id ? { ...x, quantity: x.quantity + 1 } : x);
       return [...prev, { uid: `p-${r.id}`, product_id: r.id, name: r.name, unit_price: 0, quantity: 1 }];
     });
-    setShowCart(true);
   }
 
   function addCustomLine() {
     setCart((prev) => [...prev, { uid: `c-${Date.now()}`, product_id: null, name: "", unit_price: 0, quantity: 1 }]);
-    setShowCart(true);
   }
 
   function updateLine(uid: string, patch: Partial<CartLine>) {
@@ -119,11 +117,7 @@ function StockCheckPage() {
   }
 
   function removeLine(uid: string) {
-    setCart((prev) => {
-      const next = prev.filter((x) => x.uid !== uid);
-      if (next.length === 0) setShowCart(false);
-      return next;
-    });
+    setCart((prev) => prev.filter((x) => x.uid !== uid));
   }
 
   const subtotal = cart.reduce((s, x) => s + x.unit_price * x.quantity, 0);
@@ -256,7 +250,7 @@ function StockCheckPage() {
                     <button
                       onClick={() => addToCart(r)}
                       className={`h-8 w-8 rounded-lg inline-flex items-center justify-center border transition ${inCart ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-secondary"}`}
-                      title="Add to quote"
+                      title={inCart ? "In cart" : "Add to cart"}
                     >
                       {inCart ? <ShoppingCart className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                     </button>
@@ -267,86 +261,131 @@ function StockCheckPage() {
           </div>
         </div>
 
-        {/* Quote cart */}
-        {(cart.length > 0 || showCart) && (
-          <div className="rounded-2xl border border-primary/30 bg-card shadow-soft overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 bg-primary/5 border-b border-primary/20">
+        <p className="text-center text-xs text-muted-foreground pb-20">
+          This link is for internal use only — please don't share it outside the team.
+        </p>
+      </div>
+
+      {/* ── Floating Cart Button ── */}
+      {cart.length > 0 && (
+        <button
+          onClick={() => setShowCartPanel(true)}
+          className="fixed bottom-6 right-6 z-40 h-14 rounded-full bg-primary text-primary-foreground shadow-xl px-5 inline-flex items-center gap-2.5 font-semibold text-sm"
+        >
+          <ShoppingCart className="h-5 w-5" />
+          <span>Cart</span>
+          <span className="h-5 w-5 rounded-full bg-white text-primary text-[10px] font-bold inline-flex items-center justify-center leading-none">
+            {cart.length}
+          </span>
+        </button>
+      )}
+
+      {/* ── Cart Panel ── */}
+      {showCartPanel && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col max-h-[90vh]">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200">
               <div className="flex items-center gap-2">
-                <ShoppingCart className="h-4 w-4 text-primary" />
-                <span className="text-sm font-semibold">Quotation Builder</span>
-                <span className="text-xs text-muted-foreground">({cart.length} item{cart.length !== 1 ? "s" : ""})</span>
+                <ShoppingCart className="h-4 w-4" />
+                <span className="font-semibold text-sm">Cart ({cart.length} item{cart.length !== 1 ? "s" : ""})</span>
               </div>
-              <button onClick={addCustomLine} className="h-7 px-2.5 rounded-lg border border-border text-[11px] font-semibold hover:bg-secondary">
-                + Custom Line
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={addCustomLine}
+                  className="h-7 px-2.5 rounded-lg border border-zinc-200 text-[11px] font-semibold hover:bg-zinc-50">
+                  + Custom Line
+                </button>
+                <button
+                  onClick={() => setShowCartPanel(false)}
+                  className="h-8 w-8 rounded-lg border border-zinc-200 inline-flex items-center justify-center hover:bg-zinc-50">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
-            <div className="p-4 space-y-2">
+            {/* Cart items */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {cart.map((line) => (
-                <div key={line.uid} className="rounded-lg border border-border p-3 space-y-2 bg-background">
+                <div key={line.uid} className="rounded-lg border border-zinc-200 p-3 space-y-2 bg-white">
                   {!line.product_id ? (
-                    <input value={line.name} onChange={(e) => updateLine(line.uid, { name: e.target.value })}
+                    <input
+                      value={line.name}
+                      onChange={(e) => updateLine(line.uid, { name: e.target.value })}
                       placeholder="Item / labor description"
-                      className="w-full h-8 px-2 rounded border border-border text-xs" />
+                      className="w-full h-8 px-2 rounded border border-zinc-200 text-xs" />
                   ) : (
                     <div className="text-xs font-semibold truncate">{line.name}</div>
                   )}
                   <div className="flex items-center gap-1.5">
-                    <button onClick={() => updateLine(line.uid, { quantity: Math.max(1, line.quantity - 1) })}
-                      className="h-7 w-7 rounded border border-border inline-flex items-center justify-center hover:bg-secondary shrink-0">
+                    <button
+                      onClick={() => updateLine(line.uid, { quantity: Math.max(1, line.quantity - 1) })}
+                      className="h-7 w-7 rounded border border-zinc-200 inline-flex items-center justify-center hover:bg-zinc-50 shrink-0">
                       <Minus className="h-3 w-3" />
                     </button>
-                    <input type="number" min={1} value={line.quantity}
+                    <input
+                      type="number" min={1} value={line.quantity}
                       onChange={(e) => updateLine(line.uid, { quantity: Math.max(1, Number(e.target.value) || 1) })}
-                      className="w-10 h-7 text-center rounded border border-border text-xs" />
-                    <button onClick={() => updateLine(line.uid, { quantity: line.quantity + 1 })}
-                      className="h-7 w-7 rounded border border-border inline-flex items-center justify-center hover:bg-secondary shrink-0">
+                      className="w-10 h-7 text-center rounded border border-zinc-200 text-xs" />
+                    <button
+                      onClick={() => updateLine(line.uid, { quantity: line.quantity + 1 })}
+                      className="h-7 w-7 rounded border border-zinc-200 inline-flex items-center justify-center hover:bg-zinc-50 shrink-0">
                       <Plus className="h-3 w-3" />
                     </button>
-                    <AmountInput value={line.unit_price || null} onChange={(val) => updateLine(line.uid, { unit_price: val || 0 })}
+                    <AmountInput
+                      value={line.unit_price || null}
+                      onChange={(val) => updateLine(line.uid, { unit_price: val || 0 })}
                       placeholder="Unit price"
-                      className="flex-1 h-7 px-2 rounded border border-border text-xs text-right min-w-0" />
+                      className="flex-1 h-7 px-2 rounded border border-zinc-200 text-xs text-right min-w-0" />
                     <div className="text-xs font-bold w-20 text-right shrink-0">{peso(line.unit_price * line.quantity)}</div>
-                    <button onClick={() => removeLine(line.uid)}
+                    <button
+                      onClick={() => removeLine(line.uid)}
                       className="h-7 w-7 rounded inline-flex items-center justify-center text-rose-600 hover:bg-rose-50 shrink-0">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
               ))}
+            </div>
 
-              {/* Totals + discount + notes */}
-              <div className="pt-2 space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-xs font-semibold text-muted-foreground">Discount ₱</label>
-                  <AmountInput value={discount || null} onChange={(val) => setDiscount(val || 0)}
-                    className="w-28 h-8 px-2 rounded border border-border text-xs text-right" />
-                </div>
-                <div className="rounded-lg bg-secondary/50 p-3 space-y-1 text-xs">
-                  <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span className="font-semibold text-foreground">{peso(subtotal)}</span></div>
-                  {discount > 0 && <div className="flex justify-between text-muted-foreground"><span>Discount</span><span className="text-rose-600">-{peso(discount)}</span></div>}
-                  <div className="flex justify-between font-bold text-sm border-t border-border pt-1.5"><span>Total</span><span>{peso(total)}</span></div>
-                </div>
-                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-                  placeholder="Description of work / notes (optional)"
-                  className="w-full px-3 py-2 rounded-lg border border-border text-xs resize-none" />
+            {/* Footer */}
+            <div className="p-4 border-t border-zinc-200 space-y-3 bg-zinc-50">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-semibold text-zinc-500">Discount ₱</label>
+                <AmountInput
+                  value={discount || null}
+                  onChange={(val) => setDiscount(val || 0)}
+                  className="w-28 h-8 px-2 rounded border border-zinc-200 text-xs text-right bg-white" />
               </div>
-
-              {/* Print buttons */}
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                placeholder="Description of work / notes (optional)"
+                className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-xs resize-none bg-white" />
+              <div className="rounded-lg bg-white border border-zinc-200 p-3 space-y-1 text-xs">
+                <div className="flex justify-between text-zinc-500">
+                  <span>Subtotal</span><span className="font-semibold text-zinc-800">{peso(subtotal)}</span>
+                </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-zinc-500">
+                    <span>Discount</span><span className="text-rose-600">-{peso(discount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-sm border-t border-zinc-200 pt-1.5">
+                  <span>Total</span><span>{peso(total)}</span>
+                </div>
+              </div>
               <button
-                onClick={() => setShowPrint(true)}
-                disabled={cart.length === 0}
-                className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-semibold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
-                <Printer className="h-4 w-4" />Preview & Print Quotation
+                onClick={() => { setShowCartPanel(false); setShowPrint(true); }}
+                className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-semibold text-sm inline-flex items-center justify-center gap-2">
+                <FileText className="h-4 w-4" />Get Quote
               </button>
             </div>
           </div>
-        )}
-
-        <p className="text-center text-xs text-muted-foreground">
-          This link is for internal use only — please don't share it outside the team.
-        </p>
-      </div>
+        </div>
+      )}
 
       {/* ── Print Preview Overlay ── */}
       {showPrint && (
@@ -361,11 +400,13 @@ function StockCheckPage() {
                   className="h-9 px-3 rounded-lg border border-zinc-200 text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-zinc-50">
                   <Download className="h-3.5 w-3.5" />PDF
                 </button>
-                <button onClick={() => window.print()}
+                <button
+                  onClick={() => window.print()}
                   className="h-9 px-3 rounded-lg bg-zinc-900 text-white text-xs font-semibold inline-flex items-center gap-1.5">
                   <Printer className="h-3.5 w-3.5" />Print
                 </button>
-                <button onClick={() => setShowPrint(false)}
+                <button
+                  onClick={() => setShowPrint(false)}
                   className="h-9 w-9 rounded-lg border border-zinc-200 inline-flex items-center justify-center hover:bg-zinc-50">
                   <X className="h-4 w-4" />
                 </button>
@@ -376,7 +417,7 @@ function StockCheckPage() {
             <div id="sc-printable-quote" ref={printRef}
               className="bg-white text-black text-[11px] leading-snug p-6 space-y-3 font-sans">
 
-              {/* ── Header: Logo + Company (left) · QUOTATION (right) ── */}
+              {/* ── Header ── */}
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
                   <img src={logoSrc} alt={companyName}
