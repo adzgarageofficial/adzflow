@@ -2624,38 +2624,159 @@ export type Database = {
           },
         ]
       }
+      po_delivery_receipt_items: {
+        Row: {
+          created_at: string
+          delivery_receipt_id: string
+          id: string
+          product_id: string
+          purchase_order_item_id: string
+          quantity_delivered: number
+        }
+        Insert: {
+          created_at?: string
+          delivery_receipt_id: string
+          id?: string
+          product_id: string
+          purchase_order_item_id: string
+          quantity_delivered: number
+        }
+        Update: {
+          created_at?: string
+          delivery_receipt_id?: string
+          id?: string
+          product_id?: string
+          purchase_order_item_id?: string
+          quantity_delivered?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_delivery_receipt_items_delivery_receipt_id_fkey"
+            columns: ["delivery_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "po_delivery_receipts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_delivery_receipt_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_delivery_receipt_items_purchase_order_item_id_fkey"
+            columns: ["purchase_order_item_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      po_delivery_receipts: {
+        Row: {
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          delivery_date: string
+          id: string
+          notes: string | null
+          purchase_order_id: string
+          rejection_note: string | null
+          status: Database["public"]["Enums"]["delivery_receipt_status"]
+          submitted_at: string
+          supplier_name: string
+          updated_at: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          delivery_date: string
+          id?: string
+          notes?: string | null
+          purchase_order_id: string
+          rejection_note?: string | null
+          status?: Database["public"]["Enums"]["delivery_receipt_status"]
+          submitted_at?: string
+          supplier_name: string
+          updated_at?: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          delivery_date?: string
+          id?: string
+          notes?: string | null
+          purchase_order_id?: string
+          rejection_note?: string | null
+          status?: Database["public"]["Enums"]["delivery_receipt_status"]
+          submitted_at?: string
+          supplier_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_delivery_receipts_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_delivery_receipts_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_order_items: {
         Row: {
           created_at: string
+          discount_pct: string
+          discounted_unit_cost: number | null
           id: string
           line_total: number
           product_id: string
           purchase_order_id: string
           quantity: number
+          received_at: string | null
           received_quantity: number
           unit_cost: number
+          unit_type: string
           variant_id: string | null
         }
         Insert: {
           created_at?: string
+          discount_pct?: string
+          discounted_unit_cost?: number | null
           id?: string
           line_total: number
           product_id: string
           purchase_order_id: string
           quantity: number
+          received_at?: string | null
           received_quantity?: number
           unit_cost: number
+          unit_type?: string
           variant_id?: string | null
         }
         Update: {
           created_at?: string
+          discount_pct?: string
+          discounted_unit_cost?: number | null
           id?: string
           line_total?: number
           product_id?: string
           purchase_order_id?: string
           quantity?: number
+          received_at?: string | null
           received_quantity?: number
           unit_cost?: number
+          unit_type?: string
           variant_id?: string | null
         }
         Relationships: [
@@ -2684,48 +2805,81 @@ export type Database = {
       }
       purchase_orders: {
         Row: {
+          adjustments: number
+          bill_to: string | null
+          bill_to_address: string | null
           created_at: string
           created_by: string | null
+          credit_term: string | null
+          delivery_token: string | null
           expected_at: string | null
           id: string
           notes: string | null
+          order_date: string | null
+          overall_discount_pct: number
           po_number: string
+          prepared_by: string | null
           received_at: string | null
+          shipping_charges: number
+          shipping_method: string | null
           status: Database["public"]["Enums"]["po_status"]
           subtotal: number
           supplier_id: string
+          supplier_ref: string | null
           tax: number
           total: number
           updated_at: string
           warehouse_id: string
         }
         Insert: {
+          adjustments?: number
+          bill_to?: string | null
+          bill_to_address?: string | null
           created_at?: string
           created_by?: string | null
+          credit_term?: string | null
+          delivery_token?: string | null
           expected_at?: string | null
           id?: string
           notes?: string | null
+          order_date?: string | null
+          overall_discount_pct?: number
           po_number: string
+          prepared_by?: string | null
           received_at?: string | null
+          shipping_charges?: number
+          shipping_method?: string | null
           status?: Database["public"]["Enums"]["po_status"]
           subtotal?: number
           supplier_id: string
+          supplier_ref?: string | null
           tax?: number
           total?: number
           updated_at?: string
           warehouse_id: string
         }
         Update: {
+          adjustments?: number
+          bill_to?: string | null
+          bill_to_address?: string | null
           created_at?: string
           created_by?: string | null
+          credit_term?: string | null
+          delivery_token?: string | null
           expected_at?: string | null
           id?: string
           notes?: string | null
+          order_date?: string | null
+          overall_discount_pct?: number
           po_number?: string
+          prepared_by?: string | null
           received_at?: string | null
+          shipping_charges?: number
+          shipping_method?: string | null
           status?: Database["public"]["Enums"]["po_status"]
           subtotal?: number
           supplier_id?: string
+          supplier_ref?: string | null
           tax?: number
           total?: number
           updated_at?: string
@@ -2827,6 +2981,9 @@ export type Database = {
           updated_at: string
           valid_until: string | null
           vehicle_id: string | null
+          walk_in_name: string | null
+          walk_in_car: string | null
+          walk_in_plate: string | null
         }
         Insert: {
           converted_order_id?: string | null
@@ -2845,6 +3002,9 @@ export type Database = {
           updated_at?: string
           valid_until?: string | null
           vehicle_id?: string | null
+          walk_in_name?: string | null
+          walk_in_car?: string | null
+          walk_in_plate?: string | null
         }
         Update: {
           converted_order_id?: string | null
@@ -2863,6 +3023,9 @@ export type Database = {
           updated_at?: string
           valid_until?: string | null
           vehicle_id?: string | null
+          walk_in_name?: string | null
+          walk_in_car?: string | null
+          walk_in_plate?: string | null
         }
         Relationships: [
           {
@@ -3809,6 +3972,7 @@ export type Database = {
         | "other"
       payroll_status: "draft" | "processing" | "posted" | "paid"
       payslip_status: "draft" | "finalized" | "paid"
+      delivery_receipt_status: "pending" | "confirmed" | "rejected"
       po_status: "draft" | "sent" | "received" | "partial" | "cancelled"
       product_status: "active" | "draft" | "archived" | "out_of_stock"
       quotation_status:
@@ -4094,6 +4258,7 @@ export const Constants = {
       ],
       payroll_status: ["draft", "processing", "posted", "paid"],
       payslip_status: ["draft", "finalized", "paid"],
+      delivery_receipt_status: ["pending", "confirmed", "rejected"],
       po_status: ["draft", "sent", "received", "partial", "cancelled"],
       product_status: ["active", "draft", "archived", "out_of_stock"],
       quotation_status: [

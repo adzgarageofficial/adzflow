@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
+import { AmountInput } from "@/components/ui/amount-input";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowDownRight, ArrowUpRight, Wallet, Receipt, Plus, Trash2, Edit2, Search, Repeat, CheckCircle2, Download } from "lucide-react";
@@ -344,7 +345,7 @@ function Finance() {
             <div className="grid grid-cols-2 gap-3">
               <label className="text-xs font-medium">Date<input name="txn_date" type="date" required defaultValue={editing?.txn_date ?? new Date().toISOString().slice(0, 10)} className="mt-1 w-full h-10 px-3 rounded-xl border border-border bg-card text-sm" /></label>
               <label className="text-xs font-medium">Direction<select name="direction" required defaultValue={editing?.direction ?? "in"} className="mt-1 w-full h-10 px-3 rounded-xl border border-border bg-card text-sm">{DIRECTIONS.map((d) => <option key={d} value={d}>{DIRECTION_LABELS[d]}</option>)}</select></label>
-              <label className="text-xs font-medium">Amount<input name="amount" type="number" step="0.01" required defaultValue={editing?.amount ?? ""} className="mt-1 w-full h-10 px-3 rounded-xl border border-border bg-card text-sm" /></label>
+              <label className="text-xs font-medium">Amount<AmountInput name="amount" required defaultValue={editing?.amount ?? null} className="mt-1 w-full h-10 px-3 rounded-xl border border-border bg-card text-sm" /></label>
               <label className="text-xs font-medium">Method<select name="method" defaultValue={editing?.method ?? ""} className="mt-1 w-full h-10 px-3 rounded-xl border border-border bg-card text-sm"><option value="">—</option>{METHODS.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
               <label className="text-xs font-medium">Branch<select name="branch_id" defaultValue={editing?.branch_id ?? ""} className="mt-1 w-full h-10 px-3 rounded-xl border border-border bg-card text-sm"><option value="">—</option>{branches.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
             </div>
@@ -364,7 +365,7 @@ function Finance() {
             <label className="text-xs font-medium block">Name<input name="name" required placeholder="e.g. Meralco — shop electricity" defaultValue={editingBill?.name ?? ""} className="mt-1 w-full h-10 px-3 rounded-xl border border-border bg-card text-sm" /></label>
             <div className="grid grid-cols-2 gap-3">
               <label className="text-xs font-medium">Category<input name="category" defaultValue={editingBill?.category ?? "utilities"} className="mt-1 w-full h-10 px-3 rounded-xl border border-border bg-card text-sm" /></label>
-              <label className="text-xs font-medium">Amount<input name="amount" type="number" step="0.01" required defaultValue={editingBill?.amount ?? ""} className="mt-1 w-full h-10 px-3 rounded-xl border border-border bg-card text-sm" /></label>
+              <label className="text-xs font-medium">Amount<AmountInput name="amount" required defaultValue={editingBill?.amount ?? null} className="mt-1 w-full h-10 px-3 rounded-xl border border-border bg-card text-sm" /></label>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="text-xs font-medium">Frequency<select name="frequency" required defaultValue={editingBill?.frequency ?? "monthly"} className="mt-1 w-full h-10 px-3 rounded-xl border border-border bg-card text-sm">{BILL_FREQUENCIES.map((f) => <option key={f} value={f} className="capitalize">{f}</option>)}</select></label>

@@ -9,10 +9,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Boxes, AlertTriangle, Layers, Search, Plus,
-  Archive, TrendingUp, Edit2, Trash2, Wallet, Download,
+  Archive, TrendingUp, Edit2, Trash2, Wallet, Download, Upload, Info,
 } from "lucide-react";
 import { downloadExcel } from "@/lib/export-excel";
 import { format } from "date-fns";
+import * as XLSX from "xlsx";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -33,6 +34,7 @@ function Inventory() {
   const [tab, setTab] = useState<Tab>("Stock");
   const [adjustOpen, setAdjustOpen] = useState<any | null>(null);
   const [newStockOpen, setNewStockOpen] = useState(false);
+  const [importStockOpen, setImportStockOpen] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
   const { data: levels = [] } = useInventoryLevels();
@@ -109,9 +111,14 @@ function Inventory() {
             </button>
           )}
           {tab === "Stock" && (
-            <button onClick={() => setNewStockOpen(true)} className="h-9 px-3 rounded-xl bg-primary text-primary-foreground text-xs font-semibold inline-flex items-center gap-1.5 shadow-soft hover:opacity-95">
-              <Plus className="h-3.5 w-3.5" />Add Stock Record
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setImportStockOpen(true)} className="h-9 px-3 rounded-xl border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
+                <Upload className="h-3.5 w-3.5" />Import CSV
+              </button>
+              <button onClick={() => setNewStockOpen(true)} className="h-9 px-3 rounded-xl bg-primary text-primary-foreground text-xs font-semibold inline-flex items-center gap-1.5 shadow-soft hover:opacity-95">
+                <Plus className="h-3.5 w-3.5" />Add Stock Record
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -126,6 +133,7 @@ function Inventory() {
 
       <AdjustDialog row={adjustOpen} onClose={() => setAdjustOpen(null)} />
       <NewStockDialog open={newStockOpen} onClose={() => setNewStockOpen(false)} />
+      <ImportStockDialog open={importStockOpen} onClose={() => setImportStockOpen(false)} />
     </PageShell>
   );
 }
@@ -392,8 +400,7 @@ function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: an
             <tr>
               <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">ITEM CODE</th>
               <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">BRAND</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">ITEM NAME</th>
-              <th className="text-left font-semibold px-4 py-3">DESCRIPTIONS</th>
+              <th className="text-left font-semibold px-4 py-3">DESCRIPTION</th>
               <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">UOM</th>
               <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">LOCATION</th>
               {canViewPrices && <th className="text-right font-semibold px-4 py-3 whitespace-nowrap">SRP</th>}
@@ -404,7 +411,7 @@ function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: an
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={canViewPrices ? 10 : 9} className="text-center px-6 py-10 text-muted-foreground">No stock records. Add one to get started.</td></tr>
+              <tr><td colSpan={canViewPrices ? 9 : 8} className="text-center px-6 py-10 text-muted-foreground">No stock records. Add one to get started.</td></tr>
             ) : filtered.map((r) => {
               const qtyColor = r.quantity <= 0 ? "text-rose-600 font-bold" : r.quantity <= r.reorder_point ? "text-amber-600 font-semibold" : "font-semibold";
               const uom = (r.product?.specs as any)?.uom ?? "—";
@@ -417,8 +424,10 @@ function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: an
                 >
                   <td className="px-4 py-2.5 font-mono text-xs font-semibold text-muted-foreground whitespace-nowrap">{r.product?.sku ?? "—"}</td>
                   <td className="px-4 py-2.5 font-medium whitespace-nowrap">{r.product?.brand?.name ?? "—"}</td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">{r.product?.category?.name ?? "—"}</td>
-                  <td className="px-4 py-2.5 max-w-[260px] truncate" title={r.product?.description ?? ""}>{r.product?.description ?? r.product?.name ?? "—"}</td>
+                  <td className="px-4 py-2.5 max-w-[280px]" title={[r.product?.category?.name, r.product?.description].filter(Boolean).join(" · ")}>
+                    <div className="truncate">{r.product?.description ?? r.product?.name ?? "—"}</div>
+                    {r.product?.category?.name && <div className="text-[11px] text-muted-foreground truncate">{r.product?.category?.name}</div>}
+                  </td>
                   <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{uom}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap">{r.warehouse?.name ?? "—"}</td>
                   {canViewPrices && <td className="px-4 py-2.5 text-right whitespace-nowrap">{r.product?.retail_price || r.product?.base_price ? peso(Number(r.product?.retail_price || r.product?.base_price)) : "—"}</td>}
@@ -434,7 +443,7 @@ function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: an
           {filtered.length > 0 && (
             <tfoot className="bg-secondary/40 border-t-2 border-border">
               <tr>
-                <td className="px-4 py-3 font-bold text-xs uppercase" colSpan={canViewPrices ? 7 : 6}>TOTAL</td>
+                <td className="px-4 py-3 font-bold text-xs uppercase" colSpan={canViewPrices ? 6 : 5}>TOTAL</td>
                 <td className="px-4 py-3 text-right font-bold">{totals.units.toLocaleString()}</td>
                 {canViewPrices
                   ? <td className="px-4 py-3 text-right text-xs text-muted-foreground">SRP Value: {peso(totals.srp)}</td>
@@ -652,6 +661,202 @@ function NewStockDialog({ open, onClose }: { open: boolean; onClose: () => void 
   );
 }
 
+/* ---------- Import Stock Dialog ---------- */
+const STOCK_COLUMNS = [
+  { col: "ITEM CODE",    req: true,  note: "Must exactly match existing product code (e.g. ADZ-001)" },
+  { col: "WAREHOUSE",    req: true,  note: "Must match existing location (e.g. RACK 1, ADZ Main Warehouse)" },
+  { col: "QTY",         req: true,  note: "Beginning quantity — whole number" },
+  { col: "REORDER POINT", req: false, note: "Alert threshold — whole number (default: 0)" },
+];
+
+function ImportStockDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { data: products = [] } = useProducts();
+  const { data: warehouses = [] } = useWarehouses();
+  const qc = useQueryClient();
+  const [rows, setRows] = useState<any[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+
+  function reset() { setRows([]); setShowGuide(false); }
+
+  function downloadTemplate() {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["ITEM CODE", "WAREHOUSE", "QTY", "REORDER POINT"],
+      ["ADZ-001", "RACK 1", 10, 3],
+      ["ADZ-002", "ADZ Main Warehouse", 5, 2],
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Stock");
+    XLSX.writeFile(wb, "stock_import_template.xlsx");
+  }
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const wb = XLSX.read(ev.target?.result, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { defval: "" }) as any[];
+      const parsed = data.map((row, i) => {
+        const skuRaw = String(row["ITEM CODE"] ?? "").trim();
+        const whRaw = String(row["WAREHOUSE"] ?? "").trim();
+        const product = (products as any[]).find((p) => p.sku === skuRaw);
+        const warehouse = (warehouses as any[]).find((w) => w.name.toLowerCase() === whRaw.toLowerCase());
+        const qty = row["QTY"] ? Number(row["QTY"]) : 0;
+        const reorder = row["REORDER POINT"] ? Number(row["REORDER POINT"]) : 0;
+        const errs: string[] = [];
+        if (!skuRaw) errs.push("ITEM CODE missing");
+        else if (!product) errs.push(`"${skuRaw}" not found`);
+        if (!whRaw) errs.push("WAREHOUSE missing");
+        else if (!warehouse) errs.push(`"${whRaw}" not found`);
+        return { _row: i + 2, skuRaw, whRaw, product, warehouse, qty, reorder, errs };
+      });
+      setRows(parsed);
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = "";
+  }
+
+  async function handleImport() {
+    setBusy(true);
+    const valid = rows.filter((r) => r.errs.length === 0);
+    let ok = 0, fail = 0;
+    for (const r of valid) {
+      const { error } = await supabase.from("inventory_levels").insert({
+        product_id: r.product.id,
+        warehouse_id: r.warehouse.id,
+        quantity: r.qty,
+        reorder_point: r.reorder,
+      });
+      if (error) fail++;
+      else ok++;
+    }
+    qc.invalidateQueries({ queryKey: ["inventory_levels"] });
+    setBusy(false);
+    toast.success(`Na-import: ${ok} stock records${fail ? `, ${fail} failed` : ""}`);
+    onClose(); reset();
+  }
+
+  const readyCount = rows.filter((r) => r.errs.length === 0).length;
+  const errCount = rows.filter((r) => r.errs.length > 0).length;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { onClose(); reset(); } }}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            Import Stock Records
+            <button
+              onClick={() => setShowGuide((v) => !v)}
+              title="Column guide"
+              className={`h-5 w-5 rounded-full inline-flex items-center justify-center transition-colors ${showGuide ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:bg-primary/10"}`}
+            >
+              <Info className="h-3 w-3" />
+            </button>
+          </DialogTitle>
+        </DialogHeader>
+
+        {showGuide && (
+          <div className="rounded-xl border border-border overflow-hidden text-sm mb-1">
+            <table className="w-full">
+              <thead className="bg-secondary/60 text-[10px] uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold">Column</th>
+                  <th className="px-3 py-2 text-left font-semibold">Required?</th>
+                  <th className="px-3 py-2 text-left font-semibold">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {STOCK_COLUMNS.map(({ col, req, note }) => (
+                  <tr key={col} className="border-t border-border">
+                    <td className="px-3 py-1.5 font-mono text-xs font-semibold">{col}</td>
+                    <td className="px-3 py-1.5">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${req ? "bg-rose-50 text-rose-600" : "bg-secondary text-muted-foreground"}`}>
+                        {req ? "Required" : "Optional"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-1.5 text-xs text-muted-foreground">{note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="mt-1 space-y-3">
+          <div className="flex items-center gap-3">
+            <button onClick={downloadTemplate} className="h-9 px-4 rounded-xl border border-border text-sm font-semibold inline-flex items-center gap-2 hover:bg-secondary">
+              <Download className="h-4 w-4" /> Download Template
+            </button>
+            <label className="h-9 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center gap-2 cursor-pointer hover:opacity-95">
+              <Upload className="h-4 w-4" /> {rows.length ? "Replace File" : "Upload Excel (.xlsx)"}
+              <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFile} />
+            </label>
+            {rows.length > 0 && (
+              <div className="text-sm flex items-center gap-2 ml-auto">
+                <span className="text-emerald-700 font-semibold">{readyCount} ready</span>
+                {errCount > 0 && <span className="text-rose-600">{errCount} errors</span>}
+              </div>
+            )}
+          </div>
+
+          {rows.length > 0 && (
+            <>
+              <div className="rounded-xl border border-border overflow-hidden">
+                <div className="max-h-[45vh] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-secondary/60 text-[11px] uppercase tracking-wider text-muted-foreground sticky top-0 z-10">
+                      <tr>
+                        <th className="px-3 py-2 text-left">#</th>
+                        <th className="px-3 py-2 text-left">ITEM CODE</th>
+                        <th className="px-3 py-2 text-left">WAREHOUSE</th>
+                        <th className="px-3 py-2 text-right">QTY</th>
+                        <th className="px-3 py-2 text-right">REORDER PT.</th>
+                        <th className="px-3 py-2 text-left">STATUS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r) => (
+                        <tr key={r._row} className={`border-t border-border ${r.errs.length ? "bg-rose-50/40" : ""}`}>
+                          <td className="px-3 py-2 text-xs text-muted-foreground">{r._row}</td>
+                          <td className="px-3 py-2 font-mono text-xs font-semibold">
+                            {r.product ? <span className="text-emerald-700">{r.skuRaw}</span> : <span className="text-rose-600">{r.skuRaw || "—"}</span>}
+                          </td>
+                          <td className="px-3 py-2 text-xs">
+                            {r.warehouse ? <span className="text-emerald-700">{r.whRaw}</span> : <span className="text-rose-600">{r.whRaw || "—"}</span>}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-right font-semibold">{r.qty}</td>
+                          <td className="px-3 py-2 text-xs text-right text-muted-foreground">{r.reorder || "—"}</td>
+                          <td className="px-3 py-2 text-xs">
+                            {r.errs.length === 0
+                              ? <span className="text-emerald-600 font-semibold">✓ Ready</span>
+                              : <span className="text-rose-600">{r.errs.join(" · ")}</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => { onClose(); reset(); }} className="h-9 px-4 rounded-lg border border-border text-sm">Cancel</button>
+                <button
+                  disabled={busy || readyCount === 0}
+                  onClick={handleImport}
+                  className="h-9 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold disabled:opacity-50"
+                >
+                  {busy ? "Importing…" : `Import ${readyCount} Records`}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ---------- Movements — Excel IN/OUT sheet format ---------- */
 const MOVEMENT_LABEL: Record<string, string> = {
   purchase: "STOCK IN",
@@ -694,8 +899,7 @@ function MovementsTab() {
               <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">MOVEMENT TYPE</th>
               <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">ITEM CODE</th>
               <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">BRAND</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">ITEM NAME</th>
-              <th className="text-left font-semibold px-4 py-3">DESCRIPTIONS</th>
+              <th className="text-left font-semibold px-4 py-3">DESCRIPTION</th>
               <th className="text-right font-semibold px-4 py-3 whitespace-nowrap">QTY</th>
               <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">STOCK FROM</th>
               <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">REFERENCE #</th>
@@ -707,7 +911,7 @@ function MovementsTab() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={13} className="text-center px-6 py-10 text-muted-foreground">No movements yet.</td></tr>
+              <tr><td colSpan={12} className="text-center px-6 py-10 text-muted-foreground">No movements yet.</td></tr>
             ) : filtered.map((m: any) => {
               const label = MOVEMENT_LABEL[m.movement_type] ?? m.movement_type?.toUpperCase();
               const isIn = m.quantity > 0;
@@ -723,8 +927,10 @@ function MovementsTab() {
                   </td>
                   <td className="px-4 py-2.5 font-mono text-xs font-semibold text-muted-foreground whitespace-nowrap">{m.product?.sku ?? "—"}</td>
                   <td className="px-4 py-2.5 font-medium whitespace-nowrap">{m.product?.brand?.name ?? "—"}</td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">{m.product?.category?.name ?? "—"}</td>
-                  <td className="px-4 py-2.5 max-w-[200px] truncate text-muted-foreground">{m.product?.name ?? "—"}</td>
+                  <td className="px-4 py-2.5 max-w-[240px]" title={[m.product?.category?.name, m.product?.description ?? m.product?.name].filter(Boolean).join(" · ")}>
+                    <div className="truncate">{m.product?.description ?? m.product?.name ?? "—"}</div>
+                    {m.product?.category?.name && <div className="text-[11px] text-muted-foreground truncate">{m.product?.category?.name}</div>}
+                  </td>
                   <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap ${isIn ? "text-emerald-700" : "text-rose-600"}`}>
                     {isIn ? "+" : ""}{m.quantity}
                   </td>

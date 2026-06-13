@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
+import { AmountInput } from "@/components/ui/amount-input";
 import {
   useEmployees,
   useDepartments,
@@ -333,12 +334,12 @@ function EmployeeFormDialog({ editing, departments, positions, branches, onClose
           {/* Compensation */}
           <TabsContent value="compensation" className="mt-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Basic Salary (₱/month)"><input type="number" className="input" value={form.basic_salary ?? 0} onChange={(e) => set("basic_salary", Number(e.target.value))} /></Field>
-              <Field label="Allowance (₱/month)"><input type="number" className="input" value={form.allowance ?? 0} onChange={(e) => set("allowance", Number(e.target.value))} /></Field>
+              <Field label="Basic Salary (₱/month)"><AmountInput className="input" value={form.basic_salary ?? null} onChange={(val) => set("basic_salary", val)} /></Field>
+              <Field label="Allowance (₱/month)"><AmountInput className="input" value={form.allowance ?? null} onChange={(val) => set("allowance", val)} /></Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Daily Rate (₱)"><input type="number" className="input" value={form.daily_rate ?? 0} onChange={(e) => set("daily_rate", Number(e.target.value))} /></Field>
-              <Field label="Hourly Rate (₱)"><input type="number" className="input" value={form.hourly_rate ?? 0} onChange={(e) => set("hourly_rate", Number(e.target.value))} /></Field>
+              <Field label="Daily Rate (₱)"><AmountInput className="input" value={form.daily_rate ?? null} onChange={(val) => set("daily_rate", val)} /></Field>
+              <Field label="Hourly Rate (₱)"><AmountInput className="input" value={form.hourly_rate ?? null} onChange={(val) => set("hourly_rate", val)} /></Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Commission Type">
@@ -348,7 +349,7 @@ function EmployeeFormDialog({ editing, departments, positions, branches, onClose
                 </select>
               </Field>
               <Field label={form.commission_type === "fixed" ? "Commission (₱ per job)" : "Commission Rate (%)"}>
-                <input type="number" step="0.01" className="input" value={form.commission_rate ?? 0} onChange={(e) => set("commission_rate", Number(e.target.value))} />
+                <AmountInput className="input" value={form.commission_rate ?? null} onChange={(val) => set("commission_rate", val)} />
               </Field>
             </div>
             <p className="text-[11px] text-muted-foreground -mt-1">Mechanic commission is computed automatically from completed job orders during payroll generation. Internal only — never shown on customer receipts.</p>
@@ -660,8 +661,8 @@ function ContractsSection({ employee }: { employee: any }) {
             </div>
             <Field label="Position Title"><input className="input" value={form.position_title ?? ""} onChange={(e) => setForm({ ...form, position_title: e.target.value })} /></Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Basic Salary (₱)"><input type="number" className="input" value={form.basic_salary ?? 0} onChange={(e) => setForm({ ...form, basic_salary: Number(e.target.value) })} /></Field>
-              <Field label="Allowance (₱)"><input type="number" className="input" value={form.allowance ?? 0} onChange={(e) => setForm({ ...form, allowance: Number(e.target.value) })} /></Field>
+              <Field label="Basic Salary (₱)"><AmountInput className="input" value={form.basic_salary ?? null} onChange={(val) => setForm({ ...form, basic_salary: val })} /></Field>
+              <Field label="Allowance (₱)"><AmountInput className="input" value={form.allowance ?? null} onChange={(val) => setForm({ ...form, allowance: val })} /></Field>
             </div>
             <Field label="Terms"><textarea className="input min-h-[80px]" value={form.terms ?? ""} onChange={(e) => setForm({ ...form, terms: e.target.value })} /></Field>
           </div>

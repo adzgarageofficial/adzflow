@@ -81,17 +81,15 @@ export const GROUPS: Group[] = [
       { title: "POS", url: "/pos", icon: ScanLine, mod: "pos" },
       { title: "Reservations", url: "/reservations", icon: CalendarClock, mod: "reservations" },
       { title: "Orders", url: "/orders", icon: ShoppingBag, mod: "orders" },
-      { title: "Cash Drawer", url: "/cash-drawer", icon: WalletIcon, mod: "cashDrawer" },
-      { title: "Refunds & Voids", url: "/refunds", icon: Undo2, mod: "refunds" },
+{ title: "Refunds & Voids", url: "/refunds", icon: Undo2, mod: "refunds" },
     ],
   },
   {
     id: "service", title: "Service", icon: WrenchGroup,
     items: [
-      { title: "Job Orders", url: "/job-orders", icon: Wrench, mod: "jobOrders" },
+      { title: "Workshop", url: "/bays", icon: Wrench, mod: "garage" },
       { title: "Quotations", url: "/quotations", icon: FileText, mod: "quotations" },
       { title: "Bookings", url: "/bookings", icon: CalendarDays, mod: "bookings" },
-      { title: "Bay Queue", url: "/bays", icon: LayoutGrid, mod: "garage" },
     ],
   },
   {

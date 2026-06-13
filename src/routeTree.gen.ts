@@ -16,6 +16,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as BayDisplayRouteImport } from './routes/bay-display'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
+import { Route as DeliveryTokenRouteImport } from './routes/delivery.$token'
 import { Route as AppUsersRouteImport } from './routes/_app.users'
 import { Route as AppTrainingRouteImport } from './routes/_app.training'
 import { Route as AppSuppliersRouteImport } from './routes/_app.suppliers'
@@ -49,10 +50,10 @@ import { Route as AppEmployeesRouteImport } from './routes/_app.employees'
 import { Route as AppEcommerceRouteImport } from './routes/_app.ecommerce'
 import { Route as AppDiscountsRouteImport } from './routes/_app.discounts'
 import { Route as AppDepartmentsRouteImport } from './routes/_app.departments'
+import { Route as AppDeliveriesRouteImport } from './routes/_app.deliveries'
 import { Route as AppCustomersRouteImport } from './routes/_app.customers'
 import { Route as AppCrmRouteImport } from './routes/_app.crm'
 import { Route as AppCashFlowRouteImport } from './routes/_app.cash-flow'
-import { Route as AppCashDrawerRouteImport } from './routes/_app.cash-drawer'
 import { Route as AppBookingsRouteImport } from './routes/_app.bookings'
 import { Route as AppBaysRouteImport } from './routes/_app.bays'
 import { Route as AppAuditLogRouteImport } from './routes/_app.audit-log'
@@ -98,6 +99,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRoute,
+} as any)
+const DeliveryTokenRoute = DeliveryTokenRouteImport.update({
+  id: '/delivery/$token',
+  path: '/delivery/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppUsersRoute = AppUsersRouteImport.update({
   id: '/users',
@@ -264,6 +270,11 @@ const AppDepartmentsRoute = AppDepartmentsRouteImport.update({
   path: '/departments',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDeliveriesRoute = AppDeliveriesRouteImport.update({
+  id: '/deliveries',
+  path: '/deliveries',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCustomersRoute = AppCustomersRouteImport.update({
   id: '/customers',
   path: '/customers',
@@ -277,11 +288,6 @@ const AppCrmRoute = AppCrmRouteImport.update({
 const AppCashFlowRoute = AppCashFlowRouteImport.update({
   id: '/cash-flow',
   path: '/cash-flow',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppCashDrawerRoute = AppCashDrawerRouteImport.update({
-  id: '/cash-drawer',
-  path: '/cash-drawer',
   getParentRoute: () => AppRoute,
 } as any)
 const AppBookingsRoute = AppBookingsRouteImport.update({
@@ -352,10 +358,10 @@ export interface FileRoutesByFullPath {
   '/audit-log': typeof AppAuditLogRoute
   '/bays': typeof AppBaysRoute
   '/bookings': typeof AppBookingsRoute
-  '/cash-drawer': typeof AppCashDrawerRoute
   '/cash-flow': typeof AppCashFlowRoute
   '/crm': typeof AppCrmRoute
   '/customers': typeof AppCustomersRoute
+  '/deliveries': typeof AppDeliveriesRoute
   '/departments': typeof AppDepartmentsRoute
   '/discounts': typeof AppDiscountsRoute
   '/ecommerce': typeof AppEcommerceRoute
@@ -389,6 +395,7 @@ export interface FileRoutesByFullPath {
   '/suppliers': typeof AppSuppliersRoute
   '/training': typeof AppTrainingRoute
   '/users': typeof AppUsersRoute
+  '/delivery/$token': typeof DeliveryTokenRoute
   '/my/attendance': typeof AppMyAttendanceRoute
   '/my/leaves': typeof AppMyLeavesRoute
   '/my/payslips': typeof AppMyPayslipsRoute
@@ -407,10 +414,10 @@ export interface FileRoutesByTo {
   '/audit-log': typeof AppAuditLogRoute
   '/bays': typeof AppBaysRoute
   '/bookings': typeof AppBookingsRoute
-  '/cash-drawer': typeof AppCashDrawerRoute
   '/cash-flow': typeof AppCashFlowRoute
   '/crm': typeof AppCrmRoute
   '/customers': typeof AppCustomersRoute
+  '/deliveries': typeof AppDeliveriesRoute
   '/departments': typeof AppDepartmentsRoute
   '/discounts': typeof AppDiscountsRoute
   '/ecommerce': typeof AppEcommerceRoute
@@ -444,6 +451,7 @@ export interface FileRoutesByTo {
   '/suppliers': typeof AppSuppliersRoute
   '/training': typeof AppTrainingRoute
   '/users': typeof AppUsersRoute
+  '/delivery/$token': typeof DeliveryTokenRoute
   '/': typeof AppIndexRoute
   '/my/attendance': typeof AppMyAttendanceRoute
   '/my/leaves': typeof AppMyLeavesRoute
@@ -465,10 +473,10 @@ export interface FileRoutesById {
   '/_app/audit-log': typeof AppAuditLogRoute
   '/_app/bays': typeof AppBaysRoute
   '/_app/bookings': typeof AppBookingsRoute
-  '/_app/cash-drawer': typeof AppCashDrawerRoute
   '/_app/cash-flow': typeof AppCashFlowRoute
   '/_app/crm': typeof AppCrmRoute
   '/_app/customers': typeof AppCustomersRoute
+  '/_app/deliveries': typeof AppDeliveriesRoute
   '/_app/departments': typeof AppDepartmentsRoute
   '/_app/discounts': typeof AppDiscountsRoute
   '/_app/ecommerce': typeof AppEcommerceRoute
@@ -502,6 +510,7 @@ export interface FileRoutesById {
   '/_app/suppliers': typeof AppSuppliersRoute
   '/_app/training': typeof AppTrainingRoute
   '/_app/users': typeof AppUsersRoute
+  '/delivery/$token': typeof DeliveryTokenRoute
   '/_app/': typeof AppIndexRoute
   '/_app/my/attendance': typeof AppMyAttendanceRoute
   '/_app/my/leaves': typeof AppMyLeavesRoute
@@ -524,10 +533,10 @@ export interface FileRouteTypes {
     | '/audit-log'
     | '/bays'
     | '/bookings'
-    | '/cash-drawer'
     | '/cash-flow'
     | '/crm'
     | '/customers'
+    | '/deliveries'
     | '/departments'
     | '/discounts'
     | '/ecommerce'
@@ -561,6 +570,7 @@ export interface FileRouteTypes {
     | '/suppliers'
     | '/training'
     | '/users'
+    | '/delivery/$token'
     | '/my/attendance'
     | '/my/leaves'
     | '/my/payslips'
@@ -579,10 +589,10 @@ export interface FileRouteTypes {
     | '/audit-log'
     | '/bays'
     | '/bookings'
-    | '/cash-drawer'
     | '/cash-flow'
     | '/crm'
     | '/customers'
+    | '/deliveries'
     | '/departments'
     | '/discounts'
     | '/ecommerce'
@@ -616,6 +626,7 @@ export interface FileRouteTypes {
     | '/suppliers'
     | '/training'
     | '/users'
+    | '/delivery/$token'
     | '/'
     | '/my/attendance'
     | '/my/leaves'
@@ -636,10 +647,10 @@ export interface FileRouteTypes {
     | '/_app/audit-log'
     | '/_app/bays'
     | '/_app/bookings'
-    | '/_app/cash-drawer'
     | '/_app/cash-flow'
     | '/_app/crm'
     | '/_app/customers'
+    | '/_app/deliveries'
     | '/_app/departments'
     | '/_app/discounts'
     | '/_app/ecommerce'
@@ -673,6 +684,7 @@ export interface FileRouteTypes {
     | '/_app/suppliers'
     | '/_app/training'
     | '/_app/users'
+    | '/delivery/$token'
     | '/_app/'
     | '/_app/my/attendance'
     | '/_app/my/leaves'
@@ -689,6 +701,7 @@ export interface RootRouteChildren {
   OilHistoryRoute: typeof OilHistoryRoute
   ServiceQueueRoute: typeof ServiceQueueRoute
   StockCheck4bb144df5336Route: typeof StockCheck4bb144df5336Route
+  DeliveryTokenRoute: typeof DeliveryTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -741,6 +754,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/delivery/$token': {
+      id: '/delivery/$token'
+      path: '/delivery/$token'
+      fullPath: '/delivery/$token'
+      preLoaderRoute: typeof DeliveryTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_app/users': {
       id: '/_app/users'
@@ -973,6 +993,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDepartmentsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/deliveries': {
+      id: '/_app/deliveries'
+      path: '/deliveries'
+      fullPath: '/deliveries'
+      preLoaderRoute: typeof AppDeliveriesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/customers': {
       id: '/_app/customers'
       path: '/customers'
@@ -992,13 +1019,6 @@ declare module '@tanstack/react-router' {
       path: '/cash-flow'
       fullPath: '/cash-flow'
       preLoaderRoute: typeof AppCashFlowRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/cash-drawer': {
-      id: '/_app/cash-drawer'
-      path: '/cash-drawer'
-      fullPath: '/cash-drawer'
-      preLoaderRoute: typeof AppCashDrawerRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/bookings': {
@@ -1087,10 +1107,10 @@ interface AppRouteChildren {
   AppAuditLogRoute: typeof AppAuditLogRoute
   AppBaysRoute: typeof AppBaysRoute
   AppBookingsRoute: typeof AppBookingsRoute
-  AppCashDrawerRoute: typeof AppCashDrawerRoute
   AppCashFlowRoute: typeof AppCashFlowRoute
   AppCrmRoute: typeof AppCrmRoute
   AppCustomersRoute: typeof AppCustomersRoute
+  AppDeliveriesRoute: typeof AppDeliveriesRoute
   AppDepartmentsRoute: typeof AppDepartmentsRoute
   AppDiscountsRoute: typeof AppDiscountsRoute
   AppEcommerceRoute: typeof AppEcommerceRoute
@@ -1139,10 +1159,10 @@ const AppRouteChildren: AppRouteChildren = {
   AppAuditLogRoute: AppAuditLogRoute,
   AppBaysRoute: AppBaysRoute,
   AppBookingsRoute: AppBookingsRoute,
-  AppCashDrawerRoute: AppCashDrawerRoute,
   AppCashFlowRoute: AppCashFlowRoute,
   AppCrmRoute: AppCrmRoute,
   AppCustomersRoute: AppCustomersRoute,
+  AppDeliveriesRoute: AppDeliveriesRoute,
   AppDepartmentsRoute: AppDepartmentsRoute,
   AppDiscountsRoute: AppDiscountsRoute,
   AppEcommerceRoute: AppEcommerceRoute,
@@ -1194,6 +1214,7 @@ const rootRouteChildren: RootRouteChildren = {
   OilHistoryRoute: OilHistoryRoute,
   ServiceQueueRoute: ServiceQueueRoute,
   StockCheck4bb144df5336Route: StockCheck4bb144df5336Route,
+  DeliveryTokenRoute: DeliveryTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

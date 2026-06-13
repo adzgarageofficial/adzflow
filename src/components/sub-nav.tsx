@@ -49,12 +49,13 @@ import {
   Target, Briefcase, GraduationCap,
   Gift, MessageSquare, Star,
   CalendarCheck, Banknote, UserCircle,
-  Package, Boxes, Wrench,
+  Package, Boxes, Wrench, PackageCheck,
 } from "lucide-react";
 
 export const PROCUREMENT_NAV: SubNavItem[] = [
   { title: "Suppliers", url: "/suppliers", icon: Truck },
   { title: "Purchase Orders", url: "/purchase-orders", icon: ClipboardList },
+  { title: "Deliveries", url: "/deliveries", icon: PackageCheck },
   { title: "Stock Transfers", url: "/stock-transfers", icon: ArrowLeftRight },
 ];
 
@@ -91,5 +92,6 @@ export const CATALOG_NAV: SubNavItem[] = [
   { title: "Stock & Inventory", url: "/inventory", icon: Boxes },
   { title: "Suppliers", url: "/suppliers", icon: Truck },
   { title: "Purchase Orders", url: "/purchase-orders", icon: ClipboardList },
+  { title: "Deliveries", url: "/deliveries", icon: PackageCheck },
   { title: "Stock Transfers", url: "/stock-transfers", icon: ArrowLeftRight },
 ];

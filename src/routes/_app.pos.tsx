@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
+import { AmountInput } from "@/components/ui/amount-input";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  useProducts, useCustomers, useBranches, useOrders, peso,
+  useProducts, useCustomers, useBranches, useOrders, useVehicles, peso,
   useMyProfile, useCurrentUserRoles, useDiscountApprovals, useInsert, useUpdate, useInventoryLevels, useList,
 } from "@/lib/db";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,7 +12,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Search, Plus, Minus, Trash2, Banknote, Smartphone, CreditCard,
   Building2, Link2, Check, Receipt, Pause, FileText, Undo2, PlusCircle, Wrench, Hammer, Package,
-  Wallet, Printer, ScanBarcode, Car, Download, ShieldCheck, ShieldAlert, ShieldQuestion, Hourglass, X, CalendarClock, Truck, ShoppingBag,
+  Printer, ScanBarcode, Car, Download, ShieldCheck, ShieldAlert, ShieldQuestion, Hourglass, X, CalendarClock, Truck, ShoppingBag,
   BookmarkPlus, Upload, ImageIcon, Tag, Mail, Phone,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -36,6 +37,8 @@ type Suspended = {
   branchId: string;
   notes?: string;
   savedAt: number;
+  fulfillment?: string;
+  joId?: string;
 };
 
 const PARK_KEY = "pos.parked.v1";
@@ -75,6 +78,7 @@ function POSPage() {
     order: { column: "name", ascending: true },
   });
   const { data: customers = [] } = useCustomers();
+  const { data: vehicles = [] } = useVehicles();
   const { data: branches = [] } = useBranches();
   const { data: recentOrders = [] } = useOrders();
   const { data: myProfile } = useMyProfile();
@@ -107,12 +111,14 @@ function POSPage() {
   const [showDrafts, setShowDrafts] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
   const [showRefund, setShowRefund] = useState(false);
+  const [refundSearch, setRefundSearch] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
   const [customItem, setCustomItem] = useState({ name: "", price: "", qty: "1" });
 
-  // Reservation
+  // Reservation / Queue
   const [showReserve, setShowReserve] = useState(false);
-  const [reserveForm, setReserveForm] = useState({ customerName: "", vehicle: "", plateNumber: "", downPayment: "", notes: "" });
+  const [reserveVehicleId, setReserveVehicleId] = useState("");
+  const [reserveRefNumber, setReserveRefNumber] = useState("");
   const [reserveReceiptFile, setReserveReceiptFile] = useState<File | null>(null);
   const [reserveReceiptPreview, setReserveReceiptPreview] = useState<string | null>(null);
   const [reserving, setReserving] = useState(false);
@@ -125,9 +131,24 @@ function POSPage() {
   const [walkInPhone, setWalkInPhone] = useState("");
   const [walkInVehicle, setWalkInVehicle] = useState("");
   const [walkInPlate, setWalkInPlate] = useState("");
+
+  // Derived: vehicles belonging to the currently selected registered customer
+  const customerVehicles = useMemo(
+    () => (vehicles as any[]).filter((v) => v.customer_id === customerId),
+    [vehicles, customerId],
+  );
+  const reserveVehicle = customerVehicles.find((v: any) => v.id === reserveVehicleId) ?? customerVehicles[0] ?? null;
+  const reserveCustomerName = customerId
+    ? ((customers as any[]).find((c) => c.id === customerId)?.full_name ?? "")
+    : walkInName;
+  const reserveVehicleDisplay = reserveVehicle
+    ? `${reserveVehicle.make} ${reserveVehicle.model}${reserveVehicle.year ? ` ${reserveVehicle.year}` : ""}`.trim()
+    : walkInVehicle;
+  const reservePlateDisplay = reserveVehicle?.plate_number ?? walkInPlate;
   const [showCustomLabor, setShowCustomLabor] = useState(false);
   const [laborItem, setLaborItem] = useState({ name: "Labor", price: "", qty: "1" });
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [parkedJoId, setParkedJoId] = useState<string | null>(null);
 
   useEffect(() => { setParked(loadLS<Suspended>(PARK_KEY)); setDrafts(loadLS<Suspended>(DRAFT_KEY)); }, []);
   useEffect(() => { saveLS(PARK_KEY, parked); }, [parked]);
@@ -156,10 +177,11 @@ function POSPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const norm = (s: string) => s.replace(/[-\/]/g, "");
     const matched = (products as any[]).filter((p) => {
       if (!q) return true;
-      const haystack = [p.name, p.brand?.name].filter(Boolean).join(" ");
-      return fuzzyMatch(haystack, q);
+      const haystack = norm([p.sku, p.name, p.description, p.brand?.name].filter(Boolean).join(" ").toLowerCase());
+      return fuzzyMatch(haystack, norm(q));
     });
     // A product is OOS only when it has inventory records that sum to ≤ 0
     const isOOS = (p: any) => p.id in stockByProduct && stockByProduct[p.id] <= 0;
@@ -255,25 +277,83 @@ function POSPage() {
     if (!name || price <= 0) return;
     setCart((c) => [...c, { id: `custom-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, name, sku, price, qty, custom: true }]);
   }
-  function snapshot(label: string, notes?: string): Suspended {
-    return { id: `s-${Date.now()}`, label, cart, discountAmount, customerId, branchId, notes, savedAt: Date.now() };
+  function snapshot(label: string, notes?: string, joId?: string): Suspended {
+    return { id: `s-${Date.now()}`, label, cart, discountAmount, customerId, branchId, notes, savedAt: Date.now(), fulfillment, joId };
   }
   function resetSale() {
     setCart([]); setDiscountAmount(0); setDiscountRequestId(null); setCustomerId(""); setBranchId(""); setCashReceived("");
     setPaymentReference(""); setMethod("cash"); setFulfillment("takeout");
-    setWalkInName(""); setWalkInEmail(""); setWalkInPhone(""); setWalkInVehicle(""); setWalkInPlate(""); setPendingOrderId(null);
+    setWalkInName(""); setWalkInEmail(""); setWalkInPhone(""); setWalkInVehicle(""); setWalkInPlate(""); setPendingOrderId(null); setParkedJoId(null);
   }
-  function parkOrder() {
+  async function parkOrder() {
     if (cart.length === 0) return toast.error("Cart is empty");
     const cust = customers.find((c: any) => c.id === customerId);
-    const label = cust?.full_name || `Walk-in #${parked.length + 1}`;
-    setParked((p) => [snapshot(label), ...p]);
+    const label = cust?.full_name || walkInName || `Walk-in #${parked.length + 1}`;
+
+    let joId: string | undefined;
+    if (fulfillment === "installation") {
+      try {
+        const { data: userRes } = await supabase.auth.getUser();
+        const sqCustomerName = customerId
+          ? (customers.find((x: any) => x.id === customerId)?.full_name ?? walkInName)
+          : walkInName;
+        const sqVehicle = reserveVehicleDisplay || walkInVehicle || null;
+        const sqPlate = reservePlateDisplay?.toUpperCase() || walkInPlate?.toUpperCase() || null;
+        const joDescription = `POS Installation: ${cart.map((c) => `${c.name}${c.qty > 1 ? ` x${c.qty}` : ""}`).join(", ")}`;
+        const joBase = {
+          job_number: `JO-${Date.now().toString().slice(-8)}`,
+          customer_id: customerId || null,
+          vehicle_id: reserveVehicle?.id || null,
+          description: joDescription,
+          parts_cost: subtotal,
+          labor_cost: 0,
+          total: subtotal,
+          status: "pending",
+          created_by: userRes.user?.id ?? null,
+        };
+        let newJoPark: any = null;
+        try {
+          const { data } = await (supabase as any).from("job_orders")
+            .insert({ ...joBase, walk_in_name: sqCustomerName || null, walk_in_vehicle: sqVehicle || null, walk_in_plate: sqPlate || null })
+            .select("id").single();
+          newJoPark = data;
+        } catch {
+          const { data } = await (supabase as any).from("job_orders").insert(joBase).select("id").single();
+          newJoPark = data;
+        }
+        const { data: newJo } = { data: newJoPark };
+        if (newJo?.id) joId = newJo.id;
+        const sqBase = {
+          customer_name: sqCustomerName || "Walk-in",
+          vehicle_info: sqVehicle,
+          plate_number: sqPlate,
+          services: cart.map((c) => ({ name: c.name, qty: c.qty, price: c.price })),
+          created_by: userRes.user?.id ?? null,
+        };
+        try {
+          await (supabase as any).from("service_queue").insert(
+            joId ? { ...sqBase, job_order_id: joId } : sqBase
+          );
+        } catch {
+          // job_order_id column not yet migrated — insert without it
+          await (supabase as any).from("service_queue").insert(sqBase);
+        }
+        qc.invalidateQueries({ queryKey: ["job_orders"] });
+        qc.invalidateQueries({ queryKey: ["service_queue"] });
+      } catch {
+        toast.error("Hindi nagawa ang Job Order — na-park pa rin ang order");
+      }
+    }
+
+    setParked((p) => [snapshot(label, undefined, joId), ...p]);
     resetSale();
-    toast.success("Order parked");
+    toast.success(joId ? "Order parked · Job Order created" : "Order parked");
   }
   function resume(s: Suspended, from: "park" | "draft") {
     setCart(s.cart); setDiscountAmount(s.discountAmount ?? 0); setDiscountRequestId(null);
     setCustomerId(s.customerId); setBranchId(s.branchId);
+    if (s.fulfillment) setFulfillment(s.fulfillment as any);
+    if (s.joId) setParkedJoId(s.joId);
     if (from === "park") { setParked((p) => p.filter((x) => x.id !== s.id)); setShowParked(false); }
     else { setDrafts((d) => d.filter((x) => x.id !== s.id)); setShowDrafts(false); }
     toast.success("Resumed");
@@ -439,6 +519,78 @@ function POSPage() {
 
       qc.invalidateQueries({ queryKey: ["orders"] });
       qc.invalidateQueries({ queryKey: ["finance_transactions"] });
+
+      // Link existing JO (created at park-time) to this order once payment is finalized
+      if (fulfillment === "installation" && parkedJoId) {
+        await (supabase as any).from("job_orders")
+          .update({ order_id: order.id })
+          .eq("id", parkedJoId);
+        qc.invalidateQueries({ queryKey: ["job_orders"] });
+      }
+
+      // For new installation orders (not parked, not paying a pending order):
+      // auto-create Job Order + service queue entry now.
+      if (fulfillment === "installation" && !pendingOrderId && !parkedJoId) {
+        const sqCustomerName = resolvedCustomerId
+          ? (customers.find((x: any) => x.id === resolvedCustomerId)?.full_name ?? walkInName)
+          : walkInName;
+        const sqVehicle = reserveVehicleDisplay || walkInVehicle || null;
+        const sqPlate = reservePlateDisplay?.toUpperCase() || walkInPlate?.toUpperCase() || null;
+
+        const joDescription = `POS Installation: ${cart.map((c) => `${c.name}${c.qty > 1 ? ` x${c.qty}` : ""}`).join(", ")}`;
+        const joBase = {
+          job_number: `JO-${Date.now().toString().slice(-8)}`,
+          customer_id: resolvedCustomerId || null,
+          vehicle_id: reserveVehicle?.id || null,
+          walk_in_name: sqCustomerName || null,
+          walk_in_vehicle: sqVehicle || null,
+          walk_in_plate: sqPlate || null,
+          description: joDescription,
+          parts_cost: subtotal,
+          labor_cost: 0,
+          total,
+          status: "pending",
+          created_by: userRes.user?.id ?? null,
+        };
+        let newJo: any = null;
+        try {
+          const { data } = await (supabase as any).from("job_orders")
+            .insert({ ...joBase, order_id: order.id }).select("id").single();
+          newJo = data;
+        } catch {
+          try {
+            const { data } = await (supabase as any).from("job_orders")
+              .insert(joBase).select("id").single();
+            newJo = data;
+          } catch {
+            // walk_in_* columns not yet migrated — insert minimal
+            const { data } = await (supabase as any).from("job_orders")
+              .insert({ ...joBase, walk_in_name: undefined, walk_in_vehicle: undefined, walk_in_plate: undefined })
+              .select("id").single();
+            newJo = data;
+          }
+        }
+
+        const sqBase2 = {
+          customer_name: sqCustomerName || "Walk-in",
+          vehicle_info: sqVehicle,
+          plate_number: sqPlate,
+          services: cart.map((c) => ({ name: c.name, qty: c.qty, price: c.price })),
+          reservation_number: order.order_number,
+          created_by: userRes.user?.id ?? null,
+        };
+        try {
+          await (supabase as any).from("service_queue").insert(
+            newJo?.id ? { ...sqBase2, job_order_id: newJo.id } : sqBase2
+          );
+        } catch {
+          await (supabase as any).from("service_queue").insert(sqBase2);
+        }
+
+        qc.invalidateQueries({ queryKey: ["service_queue"] });
+        qc.invalidateQueries({ queryKey: ["job_orders"] });
+      }
+
       setReceipt({
         ...order,
         items: cart.map((c) => ({ name: c.name, quantity: c.qty, line_total: c.price * c.qty })),
@@ -480,8 +632,13 @@ function POSPage() {
     if (typeof window !== "undefined") window.print();
   }
 
-  async function refundOrder(order: any, amount: number, reason: string) {
-    if (amount <= 0) return toast.error("Invalid refund amount");
+  async function refundOrder(order: any, items: any[], amount: number, reason: string) {
+    if (amount <= 0) { toast.error("Invalid refund amount"); return; }
+    const itemsTotal = items.reduce((sum: number, it: any) => sum + (it.unit_price ?? 0) * (it.qty ?? 0), 0);
+    if (amount > itemsTotal + 0.01) {
+      toast.error(`Hindi pwede — ang refund amount (${peso(amount)}) ay mas malaki sa refundable total (${peso(itemsTotal)})`);
+      return;
+    }
     try {
       const { data: userRes } = await supabase.auth.getUser();
       const { error } = await supabase.from("finance_transactions").insert({
@@ -496,7 +653,6 @@ function POSPage() {
         created_by: userRes.user?.id ?? null,
       });
       if (error) throw error;
-      // Auto-restore inventory on refund
       const { error: sErr } = await supabase.rpc("adjust_stock_for_order", {
         p_order_id: order.id, p_direction: "restore",
       });
@@ -509,6 +665,36 @@ function POSPage() {
       setShowRefund(false);
     } catch (e: any) {
       toast.error(e.message ?? "Refund failed");
+    }
+  }
+
+  async function voidOrder(order: any, reason: string) {
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const { error } = await supabase.from("finance_transactions").insert({
+        direction: "out",
+        category: "void",
+        amount: Number(order.total),
+        description: `Void ${order.order_number}${reason ? ` — ${reason}` : ""}`,
+        method: "cash",
+        reference_type: "order",
+        reference_id: order.id,
+        branch_id: order.branch_id ?? null,
+        created_by: userRes.user?.id ?? null,
+      });
+      if (error) throw error;
+      const { error: sErr } = await supabase.rpc("adjust_stock_for_order", {
+        p_order_id: order.id, p_direction: "restore",
+      });
+      if (sErr) console.warn("Stock restore failed:", sErr.message);
+      await (supabase as any).from("orders").update({ status: "voided" }).eq("id", order.id);
+      qc.invalidateQueries({ queryKey: ["inventory_levels"] });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      qc.invalidateQueries({ queryKey: ["finance_transactions"] });
+      toast.success(`Order ${order.order_number} voided`);
+      setShowRefund(false);
+    } catch (e: any) {
+      toast.error(e.message ?? "Void failed");
     }
   }
 
@@ -532,38 +718,36 @@ function POSPage() {
   }
 
   async function submitReservation() {
-    if (!reserveForm.customerName.trim()) return toast.error("Ilagay ang pangalan ng customer");
-    if (!reserveForm.vehicle.trim()) return toast.error("Ilagay ang sasakyan");
-    if (!reserveForm.plateNumber.trim()) return toast.error("Ilagay ang plate number");
+    if (!reserveCustomerName.trim()) return toast.error("Piliin ang customer o ilagay ang pangalan");
     if (cart.length === 0) return toast.error("Walang items/services sa cart");
-    if (!reserveForm.downPayment || Number(reserveForm.downPayment) <= 0) return toast.error("Ilagay ang halaga ng down payment");
-    if (!reserveReceiptFile) return toast.error("I-upload ang larawan ng resibo ng down payment");
+    if (!reserveReceiptFile) return toast.error("I-upload ang reference image");
 
     setReserving(true);
     try {
       const { data: userRes } = await supabase.auth.getUser();
 
-      // Upload receipt image
+      // Upload reference image
       const ext = reserveReceiptFile.name.split(".").pop() ?? "jpg";
       const filePath = `receipts/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from("reservation-receipts")
         .upload(filePath, reserveReceiptFile, { upsert: false });
       if (upErr) throw upErr;
-
       const { data: pubData } = supabase.storage.from("reservation-receipts").getPublicUrl(filePath);
-      const receiptUrl = pubData?.publicUrl ?? null;
+      const imageUrl = pubData?.publicUrl ?? null;
 
-      const reservationNumber = `RES-${Date.now().toString().slice(-8)}`;
+      const reservationNumber = reserveRefNumber.trim() || `RES-${Date.now().toString().slice(-8)}`;
+      const services = cart.map((c) => ({ name: c.name, qty: c.qty, price: c.price }));
+
+      // Save to reservations table
       const { error: insErr } = await (supabase as any).from("reservations").insert({
         reservation_number: reservationNumber,
-        customer_name: reserveForm.customerName.trim(),
-        vehicle: reserveForm.vehicle.trim(),
-        plate_number: reserveForm.plateNumber.trim().toUpperCase(),
+        customer_name: reserveCustomerName.trim(),
+        vehicle: reserveVehicleDisplay,
+        plate_number: reservePlateDisplay?.toUpperCase() ?? null,
         items: cart.map((c) => ({ id: c.id, name: c.name, sku: c.sku, price: c.price, qty: c.qty })),
-        down_payment_amount: Number(reserveForm.downPayment),
-        down_payment_receipt_url: receiptUrl,
-        notes: reserveForm.notes.trim() || null,
+        down_payment_amount: 0,
+        down_payment_receipt_url: imageUrl,
         reserved_by: userRes.user?.id ?? null,
         reserved_by_name: myProfile?.display_name ?? null,
         status: "pending",
@@ -573,7 +757,7 @@ function POSPage() {
       qc.invalidateQueries({ queryKey: ["reservations"] });
       await supabase.from("notifications").insert({
         title: "Bagong Reservation",
-        body: `${reserveForm.customerName} ay nag-reserve ng ${cart.length} item(s). Down payment: ${peso(Number(reserveForm.downPayment))}. Plate: ${reserveForm.plateNumber.toUpperCase()}.`,
+        body: `${reserveCustomerName} (${reservePlateDisplay ?? "Walk-in"}) — Ref: ${reservationNumber}`,
         severity: "info",
         category: "ops",
         audience_role: "owner",
@@ -581,15 +765,16 @@ function POSPage() {
       });
       qc.invalidateQueries({ queryKey: ["notifications"] });
 
-      toast.success(`Reservation ${reservationNumber} saved!`);
+      toast.success(`Na-reserve! Ref: ${reservationNumber}`);
       setShowReserve(false);
-      setReserveForm({ customerName: "", vehicle: "", plateNumber: "", downPayment: "", notes: "" });
+      setReserveVehicleId("");
+      setReserveRefNumber("");
       setReserveReceiptFile(null);
       setReserveReceiptPreview(null);
       resetSale();
       navigate({ to: "/reservations" });
     } catch (e: any) {
-      toast.error(e.message ?? "Hindi na-save ang reservation");
+      toast.error(e.message ?? "Hindi na-save ang queue");
     } finally {
       setReserving(false);
     }
@@ -599,10 +784,7 @@ function POSPage() {
     <PageShell title="POS" subtitle="Point of sale checkout.">
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Link to="/cash-drawer" className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
-          <Wallet className="h-3.5 w-3.5" />Cash Drawer
-        </Link>
-        <button onClick={() => setShowParked(true)} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
+<button onClick={() => setShowParked(true)} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
           <Pause className="h-3.5 w-3.5" />Parked <span className="text-muted-foreground">({parked.length})</span>
         </button>
         <button onClick={() => setShowDrafts(true)} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
@@ -738,11 +920,11 @@ function POSPage() {
                 }
                 return (
                 <motion.button
-                  key={p.id} whileTap={{ scale: 0.97 }}
-                  onClick={() => addToCart(p)}
+                  key={p.id} whileTap={oos ? {} : { scale: 0.97 }}
+                  onClick={() => { if (oos) return; addToCart(p); }}
                   className={`text-left rounded-xl border p-3 transition ${
                     oos
-                      ? "border-rose-100 bg-rose-50/40 opacity-60"
+                      ? "border-rose-100 bg-rose-50/40 opacity-60 cursor-not-allowed"
                       : "border-border bg-background hover:border-foreground/30"
                   }`}
                 >
@@ -876,10 +1058,9 @@ function POSPage() {
             <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{peso(subtotal)}</span></div>
             <div className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground">Discount ₱</span>
-              <input
-                type="number" min={0} step="0.01" inputMode="decimal"
-                value={discountAmount || ""} placeholder="0.00"
-                onChange={(e) => setDiscountAmount(Math.max(0, Number(e.target.value) || 0))}
+              <AmountInput
+                value={discountAmount || null} placeholder="0.00"
+                onChange={(val) => setDiscountAmount(Math.max(0, val))}
                 className="w-24 h-7 px-2 rounded border border-border text-right"
               />
             </div>
@@ -940,7 +1121,7 @@ function POSPage() {
           </div>
 
           {method === "cash" && (
-            <input type="number" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)}
+            <AmountInput value={cashReceived} onChange={(val) => setCashReceived(val ? String(val) : "")}
               placeholder="Cash received" className="mt-2 w-full h-9 px-3 rounded-lg border border-border text-sm" />
           )}
           {method === "cash" && Number(cashReceived) >= total && total > 0 && (
@@ -1034,7 +1215,16 @@ function POSPage() {
                 >
                   <Download className="h-4 w-4" />PDF
                 </button>
-                <button onClick={() => setReceipt(null)} className="h-10 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">Done</button>
+                <button
+                  onClick={() => {
+                    const wasInstallation = receipt?.fulfillment === "installation";
+                    setReceipt(null);
+                    if (wasInstallation) navigate({ to: "/bays" });
+                  }}
+                  className="h-10 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+                >
+                  {receipt?.fulfillment === "installation" ? "Done → Bay Queue" : "Done"}
+                </button>
               </div>
             </div>
           )}
@@ -1106,7 +1296,7 @@ function POSPage() {
             <input value={customItem.name} onChange={(e) => setCustomItem({ ...customItem, name: e.target.value })}
               placeholder="Item name" className="w-full h-10 px-3 rounded-lg border border-border text-sm" />
             <div className="grid grid-cols-2 gap-2">
-              <input type="number" value={customItem.price} onChange={(e) => setCustomItem({ ...customItem, price: e.target.value })}
+              <AmountInput value={customItem.price} onChange={(val) => setCustomItem({ ...customItem, price: val ? String(val) : "" })}
                 placeholder="Price" className="h-10 px-3 rounded-lg border border-border text-sm" />
               <input type="number" value={customItem.qty} onChange={(e) => setCustomItem({ ...customItem, qty: e.target.value })}
                 placeholder="Qty" className="h-10 px-3 rounded-lg border border-border text-sm" />
@@ -1128,7 +1318,7 @@ function POSPage() {
             <input value={laborItem.name} onChange={(e) => setLaborItem({ ...laborItem, name: e.target.value })}
               placeholder="Labor description (e.g. Engine tune-up)" className="w-full h-10 px-3 rounded-lg border border-border text-sm" />
             <div className="grid grid-cols-2 gap-2">
-              <input type="number" autoFocus value={laborItem.price} onChange={(e) => setLaborItem({ ...laborItem, price: e.target.value })}
+              <AmountInput autoFocus value={laborItem.price} onChange={(val) => setLaborItem({ ...laborItem, price: val ? String(val) : "" })}
                 placeholder="Labor price" className="h-10 px-3 rounded-lg border border-border text-sm" />
               <input type="number" value={laborItem.qty} onChange={(e) => setLaborItem({ ...laborItem, qty: e.target.value })}
                 placeholder="Qty" className="h-10 px-3 rounded-lg border border-border text-sm" />
@@ -1149,32 +1339,93 @@ function POSPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Refund */}
-      <Dialog open={showRefund} onOpenChange={setShowRefund}>
+      {/* Refund / Void */}
+      <Dialog open={showRefund} onOpenChange={(o) => { setShowRefund(o); if (!o) setRefundSearch(""); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Undo2 className="h-4 w-4" />Returns & Refunds</DialogTitle></DialogHeader>
-          {recentOrders.length === 0 ? (
-            <div className="text-center py-8 text-sm text-muted-foreground">No orders to refund</div>
-          ) : (
-            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-              {recentOrders.slice(0, 30).map((o: any) => (
-                <RefundRow key={o.id} order={o} onRefund={refundOrder} />
-              ))}
-            </div>
-          )}
+          <div className="relative">
+            <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={refundSearch}
+              onChange={(e) => setRefundSearch(e.target.value)}
+              placeholder="Hanapin ang customer o order number…"
+              className="w-full h-9 pl-9 pr-3 rounded-lg border border-border text-sm bg-background"
+            />
+          </div>
+          {(() => {
+            const q = refundSearch.trim().toLowerCase();
+            const salesOrders = (recentOrders as any[]).filter((o) => {
+              if (!q) return true;
+              const name = (o.customer?.full_name || o.notes?.match(/Walk-in:\s*([^|]+)/)?.[1]?.trim() || "").toLowerCase();
+              const plate = (o.notes?.match(/Plate:\s*([^|]+)/)?.[1]?.trim() || "").toLowerCase();
+              return name.includes(q) || (o.order_number || "").toLowerCase().includes(q) || plate.includes(q);
+            });
+            if (salesOrders.length === 0) return (
+              <div className="text-center py-8 text-sm text-muted-foreground">
+                {q ? `Walang order para sa "${refundSearch}"` : "Walang sales records"}
+              </div>
+            );
+            return (
+              <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-0.5">
+                {salesOrders.slice(0, 50).map((o: any) => (
+                  <RefundOrderRow key={o.id} order={o} onRefund={refundOrder} onVoid={voidOrder} />
+                ))}
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
       {/* Reservation Dialog */}
-      <Dialog open={showReserve} onOpenChange={(o) => { if (!reserving) { setShowReserve(o); if (!o) { setReserveReceiptFile(null); setReserveReceiptPreview(null); } } }}>
+      <Dialog open={showReserve} onOpenChange={(o) => { if (!reserving) { setShowReserve(o); if (!o) { setReserveReceiptFile(null); setReserveReceiptPreview(null); setReserveRefNumber(""); setReserveVehicleId(""); } } }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><BookmarkPlus className="h-5 w-5 text-amber-600" />Mag-Reserve</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><BookmarkPlus className="h-5 w-5 text-amber-600" />Mag-Queue</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-sm">
+
+            {/* Auto-filled customer + vehicle info */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+              <div className="text-[10px] uppercase tracking-wider text-amber-700 font-bold mb-0.5">Auto-fill mula sa sale</div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-20 shrink-0">Customer</span>
+                <span className="font-semibold text-sm truncate">{reserveCustomerName || <span className="text-muted-foreground italic">Walk-in (walang pangalan)</span>}</span>
+              </div>
+
+              {customerId && customerVehicles.length > 0 ? (
+                <div className="flex items-start gap-2">
+                  <span className="text-xs text-muted-foreground w-20 shrink-0 pt-1.5">Sasakyan</span>
+                  <select
+                    value={reserveVehicleId || customerVehicles[0]?.id || ""}
+                    onChange={(e) => setReserveVehicleId(e.target.value)}
+                    className="flex-1 h-9 px-2 rounded-lg border border-border text-sm bg-background"
+                  >
+                    {customerVehicles.map((v: any) => (
+                      <option key={v.id} value={v.id}>
+                        {v.make} {v.model}{v.year ? ` ${v.year}` : ""} {v.plate_number ? `· ${v.plate_number}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground w-20 shrink-0">Sasakyan</span>
+                  <span className="text-sm">{reserveVehicleDisplay || <span className="text-muted-foreground italic">—</span>}</span>
+                  {reservePlateDisplay && <span className="text-xs font-mono bg-secondary px-1.5 py-0.5 rounded">{reservePlateDisplay}</span>}
+                </div>
+              )}
+
+              {reserveVehicle && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground w-20 shrink-0">Plate</span>
+                  <span className="font-mono text-sm font-semibold">{reserveVehicle.plate_number ?? "—"}</span>
+                </div>
+              )}
+            </div>
+
             {/* Cart preview */}
             <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-1">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">Reserved Items / Services</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">Services / Items</div>
               {cart.map((it) => (
                 <div key={it.id} className="flex justify-between text-xs">
                   <span className="truncate flex-1">{it.name} × {it.qty}</span>
@@ -1186,102 +1437,47 @@ function POSPage() {
               </div>
             </div>
 
-            {/* Customer Name */}
+            {/* Reference Number (optional) */}
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Customer Name *</label>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Reference Number <span className="normal-case text-muted-foreground font-normal">(optional)</span></label>
               <input
-                value={reserveForm.customerName}
-                onChange={(e) => setReserveForm((f) => ({ ...f, customerName: e.target.value }))}
-                placeholder="Buong pangalan ng customer"
-                className="mt-1 w-full h-10 px-3 rounded-lg border border-border text-sm bg-background"
+                value={reserveRefNumber}
+                onChange={(e) => setReserveRefNumber(e.target.value)}
+                placeholder="e.g. JO-001, WO-2026-001…"
+                className="mt-1 w-full h-10 px-3 rounded-lg border border-border text-sm bg-background font-mono"
               />
             </div>
 
-            {/* Vehicle */}
+            {/* Reference Image (required) */}
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sasakyan *</label>
-              <div className="relative mt-1">
-                <Car className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={reserveForm.vehicle}
-                  onChange={(e) => setReserveForm((f) => ({ ...f, vehicle: e.target.value }))}
-                  placeholder="e.g. Toyota Vios 2020"
-                  className="w-full h-10 pl-9 pr-3 rounded-lg border border-border text-sm bg-background"
-                />
-              </div>
-            </div>
-
-            {/* Plate Number */}
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Plate Number *</label>
-              <input
-                value={reserveForm.plateNumber}
-                onChange={(e) => setReserveForm((f) => ({ ...f, plateNumber: e.target.value.toUpperCase() }))}
-                placeholder="e.g. ABC 1234"
-                className="mt-1 w-full h-10 px-3 rounded-lg border border-border text-sm bg-background font-mono uppercase"
-              />
-            </div>
-
-            {/* Down Payment */}
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Down Payment Amount *</label>
-              <input
-                type="number" min={1} step="0.01"
-                value={reserveForm.downPayment}
-                onChange={(e) => setReserveForm((f) => ({ ...f, downPayment: e.target.value }))}
-                placeholder="0.00"
-                className="mt-1 w-full h-10 px-3 rounded-lg border border-border text-sm bg-background"
-              />
-            </div>
-
-            {/* Receipt Upload */}
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Larawan ng Down Payment Receipt *</label>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Reference Image <span className="text-rose-500">*</span></label>
               <input
                 ref={reserveFileRef}
                 type="file" accept="image/*" className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0] ?? null;
                   setReserveReceiptFile(f);
-                  if (f) {
-                    const url = URL.createObjectURL(f);
-                    setReserveReceiptPreview(url);
-                  } else {
-                    setReserveReceiptPreview(null);
-                  }
+                  if (f) setReserveReceiptPreview(URL.createObjectURL(f));
+                  else setReserveReceiptPreview(null);
                 }}
               />
               {reserveReceiptPreview ? (
                 <div className="mt-1 relative">
-                  <img src={reserveReceiptPreview} alt="Receipt preview" className="w-full max-h-48 object-contain rounded-lg border border-border" />
+                  <img src={reserveReceiptPreview} alt="Reference" className="w-full max-h-48 object-contain rounded-lg border border-border" />
                   <button
                     onClick={() => { setReserveReceiptFile(null); setReserveReceiptPreview(null); if (reserveFileRef.current) reserveFileRef.current.value = ""; }}
                     className="absolute top-1 right-1 h-6 w-6 rounded-full bg-rose-600 text-white inline-flex items-center justify-center"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
+                  ><X className="h-3 w-3" /></button>
                 </div>
               ) : (
                 <button
                   onClick={() => reserveFileRef.current?.click()}
-                  className="mt-1 w-full h-20 rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground inline-flex flex-col items-center justify-center gap-1 hover:border-foreground/30 hover:bg-secondary/40 transition"
+                  className="mt-1 w-full h-20 rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground inline-flex flex-col items-center justify-center gap-1 hover:border-amber-400 hover:bg-amber-50/40 transition"
                 >
                   <Upload className="h-4 w-4" />
-                  <span>I-click para mag-upload ng larawan</span>
+                  <span>Mag-upload ng work order / inspection form</span>
                 </button>
               )}
-            </div>
-
-            {/* Notes (optional) */}
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Notes (optional)</label>
-              <textarea
-                value={reserveForm.notes}
-                onChange={(e) => setReserveForm((f) => ({ ...f, notes: e.target.value }))}
-                placeholder="Dagdag na impormasyon…"
-                rows={2}
-                className="mt-1 w-full px-3 py-2 rounded-lg border border-border text-sm bg-background resize-none"
-              />
             </div>
 
             <button
@@ -1290,7 +1486,7 @@ function POSPage() {
               className="w-full h-11 rounded-xl bg-amber-600 text-white font-semibold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-amber-700"
             >
               <BookmarkPlus className="h-4 w-4" />
-              {reserving ? "Sine-save…" : "I-save ang Reservation"}
+              {reserving ? "Sine-save…" : "I-lagay sa Queue"}
             </button>
           </div>
         </DialogContent>
@@ -1371,34 +1567,197 @@ function ApprovalRow({ request, onDecide }: { request: any; onDecide: (r: any, d
   );
 }
 
-function RefundRow({ order, onRefund }: { order: any; onRefund: (o: any, amt: number, reason: string) => void }) {
+function RefundOrderRow({ order, onRefund, onVoid }: {
+  order: any;
+  onRefund: (o: any, items: any[], amount: number, reason: string) => Promise<void>;
+  onVoid: (o: any, reason: string) => Promise<void>;
+}) {
   const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState(String(Number(order.total) || 0));
+  const [tab, setTab] = useState<"refund" | "void">("refund");
   const [reason, setReason] = useState("");
-  const [mode, setMode] = useState<"full" | "partial" | "exchange">("full");
+  const [refundAmount, setRefundAmount] = useState("");
+  const [selectedQty, setSelectedQty] = useState<Record<string, number>>({});
+  const [processing, setProcessing] = useState(false);
+
+  const { data: items = [], isLoading } = useQuery<any[]>({
+    queryKey: ["order_items", order.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("order_items").select("*").eq("order_id", order.id);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: open,
+  });
+
+  useEffect(() => {
+    if ((items as any[]).length > 0 && Object.keys(selectedQty).length === 0) {
+      const init: Record<string, number> = {};
+      (items as any[]).forEach((it) => { init[it.id] = it.quantity; });
+      setSelectedQty(init);
+    }
+  }, [items]);
+
+  const refundableTotal = (items as any[]).reduce(
+    (sum, it) => sum + (it.unit_price ?? 0) * (selectedQty[it.id] ?? 0), 0,
+  );
+
+  useEffect(() => {
+    setRefundAmount(refundableTotal > 0 ? String(refundableTotal) : "");
+  }, [refundableTotal]);
+
+  const parsedAmount = Number(refundAmount) || 0;
+  const overLimit = parsedAmount > refundableTotal + 0.01;
+  const nothingSelected = refundableTotal <= 0;
+
+  const customerLabel = order.customer?.full_name
+    || order.notes?.match(/Walk-in:\s*([^|]+)/)?.[1]?.trim()
+    || "Walk-in";
+  const plateLabel = order.notes?.match(/Plate:\s*([^|]+)/)?.[1]?.trim() ?? "";
+  const isProcessed = order.status === "refunded" || order.status === "voided";
+  const STATUS_BADGE: Record<string, string> = {
+    paid: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    pending: "bg-amber-50 text-amber-700 border-amber-200",
+    refunded: "bg-sky-50 text-sky-700 border-sky-200",
+    voided: "bg-zinc-100 text-zinc-500 border-zinc-200",
+  };
+
+  async function handleRefund() {
+    setProcessing(true);
+    const selectedItems = (items as any[])
+      .filter((it) => (selectedQty[it.id] ?? 0) > 0)
+      .map((it) => ({ ...it, qty: selectedQty[it.id] }));
+    await onRefund(order, selectedItems, parsedAmount, reason);
+    setProcessing(false);
+  }
+
+  async function handleVoid() {
+    setProcessing(true);
+    await onVoid(order, reason);
+    setProcessing(false);
+  }
+
   return (
     <div className="rounded-lg border border-border">
-      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-2 p-3 text-left hover:bg-secondary/40">
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-3 p-3 text-left hover:bg-secondary/40">
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold truncate">{order.order_number} · {order.customer?.full_name || "Walk-in"}</div>
-          <div className="text-xs text-muted-foreground">{peso(Number(order.total))} · {order.status} · {new Date(order.created_at).toLocaleDateString()}</div>
-        </div>
-        <Undo2 className="h-4 w-4 text-muted-foreground" />
-      </button>
-      {open && (
-        <div className="p-3 border-t border-border space-y-2 bg-secondary/30">
-          <div className="flex gap-1">
-            {(["full", "partial", "exchange"] as const).map((m) => (
-              <button key={m} onClick={() => { setMode(m); if (m === "full") setAmount(String(Number(order.total) || 0)); }}
-                className={`h-8 px-3 rounded-lg text-xs font-semibold capitalize border ${mode === m ? "bg-foreground text-background border-foreground" : "border-border"}`}>{m}</button>
-            ))}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-sm font-semibold">{order.order_number}</span>
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border capitalize ${STATUS_BADGE[order.status] ?? "bg-secondary text-muted-foreground border-border"}`}>{order.status}</span>
           </div>
-          <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={mode === "full"}
-            className="w-full h-9 px-3 rounded-lg border border-border text-sm disabled:opacity-60" placeholder="Refund amount" />
-          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional)"
-            className="w-full h-9 px-3 rounded-lg border border-border text-sm" />
-          <button onClick={() => onRefund(order, Number(amount) || 0, reason || mode)}
-            className="w-full h-9 rounded-lg bg-rose-600 text-white text-xs font-semibold">Process {mode === "exchange" ? "Exchange" : "Refund"} {peso(Number(amount) || 0)}</button>
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+            <span>{customerLabel}</span>
+            {plateLabel && <span className="font-mono bg-secondary border border-border px-1 py-0.5 rounded text-[11px] leading-none">{plateLabel}</span>}
+            <span>· {peso(Number(order.total))} · {new Date(order.created_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</span>
+          </div>
+        </div>
+        <Undo2 className="h-4 w-4 text-muted-foreground shrink-0" />
+      </button>
+
+      {open && (
+        <div className="p-3 border-t border-border space-y-3 bg-secondary/30">
+          {isProcessed ? (
+            <div className="text-center py-3 text-sm text-muted-foreground">
+              Order na {order.status === "refunded" ? "na-refund" : "na-void"} — hindi na mababago.
+            </div>
+          ) : (<>
+          <div className="flex gap-1">
+            <button onClick={() => setTab("refund")}
+              className={`h-8 px-3 rounded-lg text-xs font-semibold border transition inline-flex items-center gap-1 ${tab === "refund" ? "bg-foreground text-background border-foreground" : "border-border hover:bg-secondary"}`}>
+              <Undo2 className="h-3 w-3" />Refund
+            </button>
+            <button onClick={() => setTab("void")}
+              className={`h-8 px-3 rounded-lg text-xs font-semibold border transition inline-flex items-center gap-1 ${tab === "void" ? "bg-foreground text-background border-foreground" : "border-border hover:bg-secondary"}`}>
+              <X className="h-3 w-3" />Void
+            </button>
+          </div>
+
+          {isLoading ? (
+            <div className="text-xs text-muted-foreground py-2 text-center">Loading items…</div>
+          ) : (items as any[]).length === 0 ? (
+            <div className="text-xs text-muted-foreground">Walang items ang order na ito.</div>
+          ) : tab === "refund" ? (
+            <>
+              <div className="space-y-1.5">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Piliin ang items na ire-refund</div>
+                {(items as any[]).map((it) => {
+                  const qty = selectedQty[it.id] ?? 0;
+                  const checked = qty > 0;
+                  return (
+                    <div key={it.id} className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition ${checked ? "border-primary/30 bg-primary/5" : "border-border bg-background"}`}>
+                      <input type="checkbox" checked={checked}
+                        onChange={(e) => setSelectedQty((s) => ({ ...s, [it.id]: e.target.checked ? it.quantity : 0 }))}
+                        className="h-3.5 w-3.5 shrink-0 cursor-pointer" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold truncate">{it.name}</div>
+                        <div className="text-muted-foreground">{peso(it.unit_price)} × {it.quantity}</div>
+                      </div>
+                      {checked && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => setSelectedQty((s) => ({ ...s, [it.id]: Math.max(0, (s[it.id] ?? 0) - 1) }))}
+                            className="h-6 w-6 rounded border border-border inline-flex items-center justify-center hover:bg-secondary">
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="w-5 text-center font-semibold">{qty}</span>
+                          <button
+                            onClick={() => setSelectedQty((s) => ({ ...s, [it.id]: Math.min(it.quantity, (s[it.id] ?? 0) + 1) }))}
+                            className="h-6 w-6 rounded border border-border inline-flex items-center justify-center hover:bg-secondary">
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                      <div className="w-16 text-right font-bold shrink-0">{peso((it.unit_price ?? 0) * qty)}</div>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-between text-xs font-semibold pt-1 border-t border-border">
+                  <span className="text-muted-foreground">Refundable total</span>
+                  <span>{peso(refundableTotal)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Refund amount</div>
+                <AmountInput
+                  value={refundAmount}
+                  onChange={(val) => setRefundAmount(val ? String(val) : "")}
+                  className={`w-full h-9 px-3 rounded-lg border text-sm ${overLimit ? "border-rose-400 bg-rose-50 text-rose-700" : "border-border"}`}
+                  placeholder="0.00"
+                />
+                {overLimit && (
+                  <div className="text-[11px] text-rose-600 font-semibold">
+                    Hindi pwede — max refundable ay {peso(refundableTotal)} lang base sa selected items
+                  </div>
+                )}
+              </div>
+
+              <input value={reason} onChange={(e) => setReason(e.target.value)}
+                placeholder="Reason (optional)" className="w-full h-9 px-3 rounded-lg border border-border text-sm" />
+
+              <button
+                onClick={handleRefund}
+                disabled={processing || overLimit || nothingSelected || parsedAmount <= 0}
+                className="w-full h-9 rounded-lg bg-rose-600 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                {processing ? "Processing…" : `I-refund ang ${peso(parsedAmount)}`}
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 space-y-1">
+                <div className="font-semibold">Void entire order?</div>
+                <div>Ibibalik ang buong {peso(Number(order.total))} at mire-restore ang inventory. Hindi na ito mababago.</div>
+              </div>
+              <input value={reason} onChange={(e) => setReason(e.target.value)}
+                placeholder="Reason (required)" className="w-full h-9 px-3 rounded-lg border border-border text-sm" />
+              <button
+                onClick={handleVoid}
+                disabled={processing || !reason.trim()}
+                className="w-full h-9 rounded-lg bg-zinc-800 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                {processing ? "Voiding…" : `Void ${order.order_number}`}
+              </button>
+            </>
+          )}
+          </>)}
         </div>
       )}
     </div>

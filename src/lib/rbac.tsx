@@ -30,7 +30,6 @@ export type ModuleKey =
   | "suppliers"
   | "purchaseOrders"
   | "stockTransfers"
-  | "cashDrawer"
   | "refunds"
   | "loyalty"
   | "crm"
@@ -83,7 +82,6 @@ const ALL_MODULES: ModuleKey[] = [
   "suppliers",
   "purchaseOrders",
   "stockTransfers",
-  "cashDrawer",
   "refunds",
   "loyalty",
   "crm",
@@ -120,7 +118,6 @@ export const DEFAULT_ROLES: Role[] = [
       pos: ["view", "create"],
       orders: ["view", "create"],
       customers: ["view", "create"],
-      cashDrawer: ["view", "create", "edit"],
       refunds: ["view", "create"],
       reservations: ["view", "create", "edit"],
       notifications: ["view"],
@@ -142,7 +139,12 @@ export const DEFAULT_ROLES: Role[] = [
     id: "mechanic", name: "Mechanic / Technician", system: true,
     description: "Assigned service jobs and installations.",
     permissions: {
+      dashboard: ["view"],
       orders: ["view", "edit"],
+      jobOrders: ["view", "create", "edit"],
+      quotations: ["view"],
+      bookings: ["view", "edit"],
+      garage: ["view", "edit"],
       notifications: ["view"],
     },
   },
@@ -167,7 +169,6 @@ export const DEFAULT_ROLES: Role[] = [
       finance: ["view", "edit", "export", "approve"],
       analytics: ["view", "export"],
       orders: ["view", "export"],
-      cashDrawer: ["view", "export"],
       refunds: ["view", "approve"],
       reports: ["view", "create", "edit", "export"],
       auditLog: ["view", "export"],
@@ -288,7 +289,6 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   suppliers: "Suppliers",
   purchaseOrders: "Purchase Orders",
   stockTransfers: "Stock Transfers",
-  cashDrawer: "Cash Drawer",
   refunds: "Refunds & Voids",
   loyalty: "Loyalty Program",
   crm: "CRM Interactions",

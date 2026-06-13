@@ -14,29 +14,27 @@ create table if not exists public.promos (
 
 alter table public.promos enable row level security;
 
-create policy "Authenticated users can view promos"
-  on public.promos for select
-  to authenticated using (true);
+do $$ begin
+  create policy "Authenticated users can view promos" on public.promos for select to authenticated using (true);
+exception when duplicate_object then null; end $$;
 
-create policy "Authenticated users can manage promos"
-  on public.promos for all
-  to authenticated using (true) with check (true);
+do $$ begin
+  create policy "Authenticated users can manage promos" on public.promos for all to authenticated using (true) with check (true);
+exception when duplicate_object then null; end $$;
 
 -- Storage bucket for promo images
 insert into storage.buckets (id, name, public)
 values ('promo-images', 'promo-images', true)
 on conflict (id) do nothing;
 
-create policy "Public read promo images"
-  on storage.objects for select
-  using (bucket_id = 'promo-images');
+do $$ begin
+  create policy "Public read promo images" on storage.objects for select using (bucket_id = 'promo-images');
+exception when duplicate_object then null; end $$;
 
-create policy "Authenticated upload promo images"
-  on storage.objects for insert
-  to authenticated
-  with check (bucket_id = 'promo-images');
+do $$ begin
+  create policy "Authenticated upload promo images" on storage.objects for insert to authenticated with check (bucket_id = 'promo-images');
+exception when duplicate_object then null; end $$;
 
-create policy "Authenticated delete promo images"
-  on storage.objects for delete
-  to authenticated
-  using (bucket_id = 'promo-images');
+do $$ begin
+  create policy "Authenticated delete promo images" on storage.objects for delete to authenticated using (bucket_id = 'promo-images');
+exception when duplicate_object then null; end $$;

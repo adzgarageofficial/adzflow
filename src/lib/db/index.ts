@@ -549,5 +549,11 @@ export const useReferrals = () =>
     order: { column: "created_at", ascending: false },
   });
 
+export const useDeliveryReceipts = () =>
+  useList<any>("po_delivery_receipts", {
+    select: "*, purchase_order:purchase_orders(id, po_number, warehouse_id, supplier:suppliers(id, name)), items:po_delivery_receipt_items(*, product:products(id, name, sku))",
+    order: { column: "submitted_at", ascending: false },
+  });
+
 export const useReservations = () =>
   useList<any>("reservations", { order: { column: "created_at", ascending: false } });

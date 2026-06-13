@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
+import { AmountInput } from "@/components/ui/amount-input";
 import { useMemo, useState } from "react";
 import { Plus, Search, Edit2, Trash2, Wrench, History, ArrowRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -168,8 +169,8 @@ function JobDialog({ open, editing, customers, vehicles, onClose, onSave }: any)
           </Field>
           <Field label="Description"><textarea value={v.description ?? ""} onChange={(e) => setV({ ...v, description: e.target.value })} rows={3} className="w-full px-3 py-2 rounded-lg border border-border" /></Field>
           <div className="grid grid-cols-3 gap-2">
-            <Field label="Labor"><input type="number" value={v.labor_cost ?? 0} onChange={(e) => setV({ ...v, labor_cost: Number(e.target.value) })} className="w-full h-10 px-3 rounded-lg border border-border" /></Field>
-            <Field label="Parts"><input type="number" value={v.parts_cost ?? 0} onChange={(e) => setV({ ...v, parts_cost: Number(e.target.value) })} className="w-full h-10 px-3 rounded-lg border border-border" /></Field>
+            <Field label="Labor"><AmountInput value={v.labor_cost ?? null} onChange={(val) => setV({ ...v, labor_cost: val })} className="w-full h-10 px-3 rounded-lg border border-border" /></Field>
+            <Field label="Parts"><AmountInput value={v.parts_cost ?? null} onChange={(val) => setV({ ...v, parts_cost: val })} className="w-full h-10 px-3 rounded-lg border border-border" /></Field>
             <Field label="Total"><div className="h-10 px-3 inline-flex items-center font-bold">{peso(total)}</div></Field>
           </div>
           <button onClick={() => onSave({ ...v, total })} className="w-full h-10 rounded-xl bg-primary text-primary-foreground font-semibold text-sm">Save</button>
