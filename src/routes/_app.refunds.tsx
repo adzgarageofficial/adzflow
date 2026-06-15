@@ -83,7 +83,7 @@ function RefundsPage() {
             {isLoading ? (
               <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">Loading…</td></tr>
             ) : (refunds as any[]).length === 0 ? (
-              <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">Wala pang refunds.</td></tr>
+              <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">No refunds yet.</td></tr>
             ) : (
               (refunds as any[]).map((r) => (
                 <tr key={r.id} className="border-t border-border hover:bg-secondary/40">

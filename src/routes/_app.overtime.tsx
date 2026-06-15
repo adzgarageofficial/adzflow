@@ -78,7 +78,7 @@ function OvertimePage() {
   return (
     <PageShell
       title="Overtime"
-      subtitle="File at approve ang overtime requests ng employees."
+      subtitle="File and approve overtime requests for employees."
       actions={
         <button
           onClick={() =>
@@ -126,7 +126,7 @@ function OvertimePage() {
               {requests.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-10 text-muted-foreground">
-                    Walang OT requests pa.
+                    No overtime requests yet.
                   </td>
                 </tr>
               ) : (

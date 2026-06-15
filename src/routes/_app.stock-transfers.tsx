@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
-import { SubNav, PROCUREMENT_NAV } from "@/components/sub-nav";
+import { SubNav, CATALOG_NAV } from "@/components/sub-nav";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeftRight, Plus, Trash2, Send, PackageCheck } from "lucide-react";
 import { useState } from "react";
@@ -37,7 +37,7 @@ function StockTransfersPage() {
         </button>
       }
     >
-      <SubNav items={PROCUREMENT_NAV} label="Procurement" />
+      <SubNav items={CATALOG_NAV} label="Catalog" />
       <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-secondary/60 text-xs uppercase tracking-wider text-muted-foreground">
@@ -54,7 +54,7 @@ function StockTransfersPage() {
             {isLoading ? (
               <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">Loading…</td></tr>
             ) : (transfers as any[]).length === 0 ? (
-              <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">Wala pang transfers.</td></tr>
+              <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">No stock transfers yet.</td></tr>
             ) : (
               (transfers as any[]).map((t) => (
                 <tr key={t.id} className="border-t border-border hover:bg-secondary/40 cursor-pointer" onClick={() => setViewing(t)}>
@@ -163,7 +163,7 @@ function NewTransferDialog({ open, onClose }: { open: boolean; onClose: () => vo
               <button onClick={addItem} className="text-xs text-primary hover:underline">+ Add Item</button>
             </div>
             {items.length === 0 ? (
-              <div className="p-6 text-center text-sm text-muted-foreground">Wala pang items.</div>
+              <div className="p-6 text-center text-sm text-muted-foreground">No items yet.</div>
             ) : (
               <table className="w-full text-sm">
                 <thead className="text-xs text-muted-foreground"><tr><th className="text-left px-3 py-2">Product</th><th className="px-3 py-2 w-24">Qty</th><th className="w-10"></th></tr></thead>

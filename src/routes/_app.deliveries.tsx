@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
-import { SubNav, PROCUREMENT_NAV } from "@/components/sub-nav";
+import { SubNav, CATALOG_NAV } from "@/components/sub-nav";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PackageCheck, CheckCircle2, XCircle, Clock, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
@@ -48,9 +48,9 @@ function DeliveriesPage() {
   return (
     <PageShell
       title="Deliveries"
-      subtitle="I-review at i-confirm ang mga delivery receipt na galing sa mga supplier."
+      subtitle="Review and confirm delivery receipts submitted by suppliers."
     >
-      <SubNav items={PROCUREMENT_NAV} label="Procurement" />
+      <SubNav items={CATALOG_NAV} label="Catalog" />
 
       {/* ── Pending Confirmation ── */}
       <section className="mb-8">
@@ -68,7 +68,7 @@ function DeliveriesPage() {
         ) : pending.length === 0 ? (
           <div className="rounded-2xl border border-border bg-card p-8 text-center">
             <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">Wala pang pending delivery receipts. Clear!</p>
+            <p className="text-sm text-muted-foreground">No pending delivery receipts. All clear!</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -96,7 +96,7 @@ function DeliveriesPage() {
             </span>
           </div>
           <p className="text-xs text-muted-foreground mb-3">
-            Mga PO na may pending/partial status pero wala pang delivery receipt na na-submit ng supplier.
+            POs with pending/partial status that have no delivery receipt submitted by the supplier yet.
           </p>
           <div className="rounded-2xl border border-border bg-card overflow-hidden">
             <table className="w-full text-sm">
@@ -401,7 +401,7 @@ function ConfirmDialog({ receipt, onClose, onDone }: { receipt: any; onClose: ()
 
           <div className="flex items-start gap-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-4 py-3 text-xs text-amber-700 dark:text-amber-400">
             <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-            <p>Kapag na-confirm, mare-record agad sa stock movements at maa-update ang inventory. Hindi na ito mababago.</p>
+            <p>Once confirmed, stock movements will be recorded and inventory updated immediately. This cannot be undone.</p>
           </div>
 
           <div className="flex justify-end gap-2">
@@ -456,18 +456,18 @@ function RejectDialog({ receipt, onClose, onDone }: { receipt: any; onClose: () 
 
         <div className="space-y-4 text-sm">
           <p className="text-muted-foreground text-xs">
-            I-reject ang delivery receipt ni <strong>{receipt.supplier_name}</strong> para sa{" "}
+            Reject the delivery receipt from <strong>{receipt.supplier_name}</strong> for{" "}
             <strong>{receipt.purchase_order?.po_number}</strong>.
-            Hindi mag-a-update ang inventory.
+            Inventory will not be updated.
           </p>
 
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">Dahilan (optional)</label>
+            <label className="block text-xs text-muted-foreground mb-1">Reason (optional)</label>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={3}
-              placeholder="e.g. Mali ang quantity, hindi tugma sa PO…"
+              placeholder="e.g. Wrong quantity, does not match PO…"
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40 resize-none"
             />
           </div>

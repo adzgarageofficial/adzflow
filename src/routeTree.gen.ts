@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StockCheck4bb144df5336RouteImport } from './routes/stock-check-4bb144df5336'
+import { Route as Setup2faRouteImport } from './routes/setup-2fa'
 import { Route as ServiceQueueRouteImport } from './routes/service-queue'
 import { Route as OilHistoryRouteImport } from './routes/oil-history'
 import { Route as LoginRouteImport } from './routes/login'
@@ -38,6 +39,7 @@ import { Route as AppPayrollRouteImport } from './routes/_app.payroll'
 import { Route as AppPaymentsRouteImport } from './routes/_app.payments'
 import { Route as AppOvertimeRouteImport } from './routes/_app.overtime'
 import { Route as AppOrdersRouteImport } from './routes/_app.orders'
+import { Route as AppOilRecordsRouteImport } from './routes/_app.oil-records'
 import { Route as AppNotificationsRouteImport } from './routes/_app.notifications'
 import { Route as AppMarketingRouteImport } from './routes/_app.marketing'
 import { Route as AppLoyaltyRouteImport } from './routes/_app.loyalty'
@@ -52,8 +54,10 @@ import { Route as AppDiscountsRouteImport } from './routes/_app.discounts'
 import { Route as AppDepartmentsRouteImport } from './routes/_app.departments'
 import { Route as AppDeliveriesRouteImport } from './routes/_app.deliveries'
 import { Route as AppCustomersRouteImport } from './routes/_app.customers'
+import { Route as AppCustomerHistoryRouteImport } from './routes/_app.customer-history'
 import { Route as AppCrmRouteImport } from './routes/_app.crm'
 import { Route as AppCashFlowRouteImport } from './routes/_app.cash-flow'
+import { Route as AppBrandsRouteImport } from './routes/_app.brands'
 import { Route as AppBookingsRouteImport } from './routes/_app.bookings'
 import { Route as AppBaysRouteImport } from './routes/_app.bays'
 import { Route as AppAuditLogRouteImport } from './routes/_app.audit-log'
@@ -69,6 +73,11 @@ import { Route as AppMyAttendanceRouteImport } from './routes/_app.my.attendance
 const StockCheck4bb144df5336Route = StockCheck4bb144df5336RouteImport.update({
   id: '/stock-check-4bb144df5336',
   path: '/stock-check-4bb144df5336',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Setup2faRoute = Setup2faRouteImport.update({
+  id: '/setup-2fa',
+  path: '/setup-2fa',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ServiceQueueRoute = ServiceQueueRouteImport.update({
@@ -210,6 +219,11 @@ const AppOrdersRoute = AppOrdersRouteImport.update({
   path: '/orders',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOilRecordsRoute = AppOilRecordsRouteImport.update({
+  id: '/oil-records',
+  path: '/oil-records',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppNotificationsRoute = AppNotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
@@ -280,6 +294,11 @@ const AppCustomersRoute = AppCustomersRouteImport.update({
   path: '/customers',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCustomerHistoryRoute = AppCustomerHistoryRouteImport.update({
+  id: '/customer-history',
+  path: '/customer-history',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCrmRoute = AppCrmRouteImport.update({
   id: '/crm',
   path: '/crm',
@@ -288,6 +307,11 @@ const AppCrmRoute = AppCrmRouteImport.update({
 const AppCashFlowRoute = AppCashFlowRouteImport.update({
   id: '/cash-flow',
   path: '/cash-flow',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBrandsRoute = AppBrandsRouteImport.update({
+  id: '/brands',
+  path: '/brands',
   getParentRoute: () => AppRoute,
 } as any)
 const AppBookingsRoute = AppBookingsRouteImport.update({
@@ -352,14 +376,17 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/oil-history': typeof OilHistoryRoute
   '/service-queue': typeof ServiceQueueRoute
+  '/setup-2fa': typeof Setup2faRoute
   '/stock-check-4bb144df5336': typeof StockCheck4bb144df5336Route
   '/analytics': typeof AppAnalyticsRoute
   '/attendance': typeof AppAttendanceRoute
   '/audit-log': typeof AppAuditLogRoute
   '/bays': typeof AppBaysRoute
   '/bookings': typeof AppBookingsRoute
+  '/brands': typeof AppBrandsRoute
   '/cash-flow': typeof AppCashFlowRoute
   '/crm': typeof AppCrmRoute
+  '/customer-history': typeof AppCustomerHistoryRoute
   '/customers': typeof AppCustomersRoute
   '/deliveries': typeof AppDeliveriesRoute
   '/departments': typeof AppDepartmentsRoute
@@ -374,6 +401,7 @@ export interface FileRoutesByFullPath {
   '/loyalty': typeof AppLoyaltyRoute
   '/marketing': typeof AppMarketingRoute
   '/notifications': typeof AppNotificationsRoute
+  '/oil-records': typeof AppOilRecordsRoute
   '/orders': typeof AppOrdersRoute
   '/overtime': typeof AppOvertimeRoute
   '/payments': typeof AppPaymentsRoute
@@ -408,14 +436,17 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/oil-history': typeof OilHistoryRoute
   '/service-queue': typeof ServiceQueueRoute
+  '/setup-2fa': typeof Setup2faRoute
   '/stock-check-4bb144df5336': typeof StockCheck4bb144df5336Route
   '/analytics': typeof AppAnalyticsRoute
   '/attendance': typeof AppAttendanceRoute
   '/audit-log': typeof AppAuditLogRoute
   '/bays': typeof AppBaysRoute
   '/bookings': typeof AppBookingsRoute
+  '/brands': typeof AppBrandsRoute
   '/cash-flow': typeof AppCashFlowRoute
   '/crm': typeof AppCrmRoute
+  '/customer-history': typeof AppCustomerHistoryRoute
   '/customers': typeof AppCustomersRoute
   '/deliveries': typeof AppDeliveriesRoute
   '/departments': typeof AppDepartmentsRoute
@@ -430,6 +461,7 @@ export interface FileRoutesByTo {
   '/loyalty': typeof AppLoyaltyRoute
   '/marketing': typeof AppMarketingRoute
   '/notifications': typeof AppNotificationsRoute
+  '/oil-records': typeof AppOilRecordsRoute
   '/orders': typeof AppOrdersRoute
   '/overtime': typeof AppOvertimeRoute
   '/payments': typeof AppPaymentsRoute
@@ -467,14 +499,17 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/oil-history': typeof OilHistoryRoute
   '/service-queue': typeof ServiceQueueRoute
+  '/setup-2fa': typeof Setup2faRoute
   '/stock-check-4bb144df5336': typeof StockCheck4bb144df5336Route
   '/_app/analytics': typeof AppAnalyticsRoute
   '/_app/attendance': typeof AppAttendanceRoute
   '/_app/audit-log': typeof AppAuditLogRoute
   '/_app/bays': typeof AppBaysRoute
   '/_app/bookings': typeof AppBookingsRoute
+  '/_app/brands': typeof AppBrandsRoute
   '/_app/cash-flow': typeof AppCashFlowRoute
   '/_app/crm': typeof AppCrmRoute
+  '/_app/customer-history': typeof AppCustomerHistoryRoute
   '/_app/customers': typeof AppCustomersRoute
   '/_app/deliveries': typeof AppDeliveriesRoute
   '/_app/departments': typeof AppDepartmentsRoute
@@ -489,6 +524,7 @@ export interface FileRoutesById {
   '/_app/loyalty': typeof AppLoyaltyRoute
   '/_app/marketing': typeof AppMarketingRoute
   '/_app/notifications': typeof AppNotificationsRoute
+  '/_app/oil-records': typeof AppOilRecordsRoute
   '/_app/orders': typeof AppOrdersRoute
   '/_app/overtime': typeof AppOvertimeRoute
   '/_app/payments': typeof AppPaymentsRoute
@@ -527,14 +563,17 @@ export interface FileRouteTypes {
     | '/login'
     | '/oil-history'
     | '/service-queue'
+    | '/setup-2fa'
     | '/stock-check-4bb144df5336'
     | '/analytics'
     | '/attendance'
     | '/audit-log'
     | '/bays'
     | '/bookings'
+    | '/brands'
     | '/cash-flow'
     | '/crm'
+    | '/customer-history'
     | '/customers'
     | '/deliveries'
     | '/departments'
@@ -549,6 +588,7 @@ export interface FileRouteTypes {
     | '/loyalty'
     | '/marketing'
     | '/notifications'
+    | '/oil-records'
     | '/orders'
     | '/overtime'
     | '/payments'
@@ -583,14 +623,17 @@ export interface FileRouteTypes {
     | '/login'
     | '/oil-history'
     | '/service-queue'
+    | '/setup-2fa'
     | '/stock-check-4bb144df5336'
     | '/analytics'
     | '/attendance'
     | '/audit-log'
     | '/bays'
     | '/bookings'
+    | '/brands'
     | '/cash-flow'
     | '/crm'
+    | '/customer-history'
     | '/customers'
     | '/deliveries'
     | '/departments'
@@ -605,6 +648,7 @@ export interface FileRouteTypes {
     | '/loyalty'
     | '/marketing'
     | '/notifications'
+    | '/oil-records'
     | '/orders'
     | '/overtime'
     | '/payments'
@@ -641,14 +685,17 @@ export interface FileRouteTypes {
     | '/login'
     | '/oil-history'
     | '/service-queue'
+    | '/setup-2fa'
     | '/stock-check-4bb144df5336'
     | '/_app/analytics'
     | '/_app/attendance'
     | '/_app/audit-log'
     | '/_app/bays'
     | '/_app/bookings'
+    | '/_app/brands'
     | '/_app/cash-flow'
     | '/_app/crm'
+    | '/_app/customer-history'
     | '/_app/customers'
     | '/_app/deliveries'
     | '/_app/departments'
@@ -663,6 +710,7 @@ export interface FileRouteTypes {
     | '/_app/loyalty'
     | '/_app/marketing'
     | '/_app/notifications'
+    | '/_app/oil-records'
     | '/_app/orders'
     | '/_app/overtime'
     | '/_app/payments'
@@ -700,6 +748,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   OilHistoryRoute: typeof OilHistoryRoute
   ServiceQueueRoute: typeof ServiceQueueRoute
+  Setup2faRoute: typeof Setup2faRoute
   StockCheck4bb144df5336Route: typeof StockCheck4bb144df5336Route
   DeliveryTokenRoute: typeof DeliveryTokenRoute
 }
@@ -711,6 +760,13 @@ declare module '@tanstack/react-router' {
       path: '/stock-check-4bb144df5336'
       fullPath: '/stock-check-4bb144df5336'
       preLoaderRoute: typeof StockCheck4bb144df5336RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup-2fa': {
+      id: '/setup-2fa'
+      path: '/setup-2fa'
+      fullPath: '/setup-2fa'
+      preLoaderRoute: typeof Setup2faRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/service-queue': {
@@ -909,6 +965,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrdersRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/oil-records': {
+      id: '/_app/oil-records'
+      path: '/oil-records'
+      fullPath: '/oil-records'
+      preLoaderRoute: typeof AppOilRecordsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/notifications': {
       id: '/_app/notifications'
       path: '/notifications'
@@ -1007,6 +1070,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCustomersRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/customer-history': {
+      id: '/_app/customer-history'
+      path: '/customer-history'
+      fullPath: '/customer-history'
+      preLoaderRoute: typeof AppCustomerHistoryRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/crm': {
       id: '/_app/crm'
       path: '/crm'
@@ -1019,6 +1089,13 @@ declare module '@tanstack/react-router' {
       path: '/cash-flow'
       fullPath: '/cash-flow'
       preLoaderRoute: typeof AppCashFlowRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/brands': {
+      id: '/_app/brands'
+      path: '/brands'
+      fullPath: '/brands'
+      preLoaderRoute: typeof AppBrandsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/bookings': {
@@ -1107,8 +1184,10 @@ interface AppRouteChildren {
   AppAuditLogRoute: typeof AppAuditLogRoute
   AppBaysRoute: typeof AppBaysRoute
   AppBookingsRoute: typeof AppBookingsRoute
+  AppBrandsRoute: typeof AppBrandsRoute
   AppCashFlowRoute: typeof AppCashFlowRoute
   AppCrmRoute: typeof AppCrmRoute
+  AppCustomerHistoryRoute: typeof AppCustomerHistoryRoute
   AppCustomersRoute: typeof AppCustomersRoute
   AppDeliveriesRoute: typeof AppDeliveriesRoute
   AppDepartmentsRoute: typeof AppDepartmentsRoute
@@ -1123,6 +1202,7 @@ interface AppRouteChildren {
   AppLoyaltyRoute: typeof AppLoyaltyRoute
   AppMarketingRoute: typeof AppMarketingRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
+  AppOilRecordsRoute: typeof AppOilRecordsRoute
   AppOrdersRoute: typeof AppOrdersRoute
   AppOvertimeRoute: typeof AppOvertimeRoute
   AppPaymentsRoute: typeof AppPaymentsRoute
@@ -1159,8 +1239,10 @@ const AppRouteChildren: AppRouteChildren = {
   AppAuditLogRoute: AppAuditLogRoute,
   AppBaysRoute: AppBaysRoute,
   AppBookingsRoute: AppBookingsRoute,
+  AppBrandsRoute: AppBrandsRoute,
   AppCashFlowRoute: AppCashFlowRoute,
   AppCrmRoute: AppCrmRoute,
+  AppCustomerHistoryRoute: AppCustomerHistoryRoute,
   AppCustomersRoute: AppCustomersRoute,
   AppDeliveriesRoute: AppDeliveriesRoute,
   AppDepartmentsRoute: AppDepartmentsRoute,
@@ -1175,6 +1257,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLoyaltyRoute: AppLoyaltyRoute,
   AppMarketingRoute: AppMarketingRoute,
   AppNotificationsRoute: AppNotificationsRoute,
+  AppOilRecordsRoute: AppOilRecordsRoute,
   AppOrdersRoute: AppOrdersRoute,
   AppOvertimeRoute: AppOvertimeRoute,
   AppPaymentsRoute: AppPaymentsRoute,
@@ -1213,6 +1296,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   OilHistoryRoute: OilHistoryRoute,
   ServiceQueueRoute: ServiceQueueRoute,
+  Setup2faRoute: Setup2faRoute,
   StockCheck4bb144df5336Route: StockCheck4bb144df5336Route,
   DeliveryTokenRoute: DeliveryTokenRoute,
 }

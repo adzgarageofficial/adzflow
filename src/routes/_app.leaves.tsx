@@ -154,7 +154,7 @@ function LeavesPage() {
   return (
     <PageShell
       title="Leave Management"
-      subtitle="Vacation, sick at iba pang leave requests, balances at approvals."
+      subtitle="Vacation, sick, and other leave requests, balances, and approvals."
       actions={
         <button
           onClick={() =>
@@ -209,7 +209,7 @@ function LeavesPage() {
                 {requests.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="text-center py-10 text-muted-foreground">
-                      Walang leave requests pa.
+                      No leave requests yet.
                     </td>
                   </tr>
                 ) : (
@@ -299,7 +299,7 @@ function LeavesPage() {
                   {balances.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="text-center py-10 text-muted-foreground">
-                        Walang naka-set na leave balances. I-set ang yearly entitlement ng bawat employee.
+                        No leave balances set. Configure the yearly entitlement for each employee.
                       </td>
                     </tr>
                   ) : (

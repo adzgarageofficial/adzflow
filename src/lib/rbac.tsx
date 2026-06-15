@@ -41,7 +41,11 @@ export type ModuleKey =
   | "roles"
   | "settings"
   | "reservations"
-  | "promos";
+  | "promos"
+  | "deliveries"
+  | "cashFlow"
+  | "discounts"
+  | "payments";
 
 export type ActionKey = "view" | "create" | "edit" | "delete" | "export" | "approve";
 
@@ -92,6 +96,10 @@ const ALL_MODULES: ModuleKey[] = [
   "users", "roles", "settings",
   "reservations",
   "promos",
+  "deliveries",
+  "cashFlow",
+  "discounts",
+  "payments",
 ];
 
 const fullAccess = (): Permissions =>
@@ -120,6 +128,8 @@ export const DEFAULT_ROLES: Role[] = [
       customers: ["view", "create"],
       refunds: ["view", "create"],
       reservations: ["view", "create", "edit"],
+      discounts: ["view"],
+      payments: ["view"],
       notifications: ["view"],
     },
   },
@@ -131,6 +141,7 @@ export const DEFAULT_ROLES: Role[] = [
       inventory: ["view", "create", "edit", "approve"],
       suppliers: ["view", "create", "edit"],
       purchaseOrders: ["view", "create", "edit", "approve"],
+      deliveries: ["view", "create", "edit", "approve"],
       stockTransfers: ["view", "create", "edit", "approve"],
       notifications: ["view"],
     },
@@ -153,6 +164,7 @@ export const DEFAULT_ROLES: Role[] = [
     description: "Marketing campaigns, ecommerce and customers.",
     permissions: {
       promos: ["view", "create", "edit", "delete"],
+      discounts: ["view", "create", "edit", "delete"],
       marketing: ["view", "create", "edit"],
       ecommerce: ["view", "create", "edit"],
       customers: ["view", "edit", "export"],
@@ -171,6 +183,8 @@ export const DEFAULT_ROLES: Role[] = [
       orders: ["view", "export"],
       refunds: ["view", "approve"],
       reports: ["view", "create", "edit", "export"],
+      cashFlow: ["view", "export"],
+      payments: ["view", "export"],
       auditLog: ["view", "export"],
       notifications: ["view"],
     },
@@ -184,6 +198,7 @@ interface RbacContextValue {
   roles: Role[];
   setRoles: (r: Role[]) => void;
   can: (mod: ModuleKey, action?: ActionKey) => boolean;
+  isRolesLoading: boolean;
 }
 
 const Ctx = createContext<RbacContextValue | null>(null);
@@ -232,7 +247,7 @@ export function RbacProvider({ children }: { children: ReactNode }) {
   };
 
   const { data: myProfile } = useMyProfile();
-  const { data: myRoles = [] } = useCurrentUserRoles();
+  const { data: myRoles = [], isLoading: rolesLoading } = useCurrentUserRoles();
   const { data: profiles = [] } = useProfiles();
   const { data: userRoles = [] } = useUserRoles();
 
@@ -248,8 +263,8 @@ export function RbacProvider({ children }: { children: ReactNode }) {
       const acts = currentRole.permissions[mod];
       return !!acts && acts.includes(action);
     };
-    return { currentUser, currentRole, users, roles, setRoles, can };
-  }, [roles, myProfile, myRoles, profiles, userRoles]);
+    return { currentUser, currentRole, users, roles, setRoles, can, isRolesLoading: rolesLoading };
+  }, [roles, myProfile, myRoles, profiles, userRoles, rolesLoading]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -301,6 +316,10 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   settings: "Settings",
   reservations: "Reservations",
   promos: "Promotions",
+  deliveries: "Delivery Receipts",
+  cashFlow: "Cash Flow",
+  discounts: "Discounts",
+  payments: "Payments",
 };
 
 export const ALL_ACTION_KEYS = ALL_ACTIONS;

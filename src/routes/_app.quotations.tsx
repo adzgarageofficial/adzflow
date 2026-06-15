@@ -14,15 +14,6 @@ import { downloadElementAsPdf } from "@/lib/pdf";
 
 export const Route = createFileRoute("/_app/quotations")({ component: QuotationsPage });
 
-const STATUSES = ["draft", "sent", "approved", "rejected", "expired", "converted"] as const;
-const COLORS: Record<string, string> = {
-  draft: "bg-zinc-100 text-zinc-700 border-zinc-200",
-  sent: "bg-blue-50 text-blue-700 border-blue-100",
-  approved: "bg-emerald-50 text-emerald-700 border-emerald-100",
-  rejected: "bg-rose-50 text-rose-700 border-rose-100",
-  expired: "bg-amber-50 text-amber-700 border-amber-100",
-  converted: "bg-purple-50 text-purple-700 border-purple-100",
-};
 
 function fuzzyMatch(hay: string, q: string) {
   return q.trim().toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
@@ -123,15 +114,13 @@ function QuotationsPage() {
               <th className="text-left font-medium px-6 py-3">Quote #</th>
               <th className="text-left font-medium px-6 py-3">Customer</th>
               <th className="text-left font-medium px-6 py-3">Car / Plate</th>
-              <th className="text-left font-medium px-6 py-3">Valid Until</th>
-              <th className="text-left font-medium px-6 py-3">Status</th>
               <th className="text-right font-medium px-6 py-3">Total</th>
               <th className="px-6 py-3"></th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-10 text-muted-foreground">No quotations yet.</td></tr>
+              <tr><td colSpan={5} className="text-center py-10 text-muted-foreground">No quotations yet.</td></tr>
             ) : filtered.map((x: any) => (
               <tr key={x.id} className="border-t border-border hover:bg-secondary/40">
                 <td className="px-6 py-3 font-medium">{x.quotation_number}</td>
@@ -142,14 +131,6 @@ function QuotationsPage() {
                     <span className="ml-1.5 font-mono bg-secondary border border-border px-1 py-0.5 rounded text-[10px]">{x.walk_in_plate}</span>
                   )}
                   {!x.walk_in_car && !x.walk_in_plate && "—"}
-                </td>
-                <td className="px-6 py-3 text-xs text-muted-foreground">{x.valid_until ?? "—"}</td>
-                <td className="px-6 py-3">
-                  <select disabled={!canEdit} value={x.status}
-                    onChange={(e) => upd.mutate({ id: x.id, patch: { status: e.target.value as any } })}
-                    className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${COLORS[x.status]}`}>
-                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
                 </td>
                 <td className="px-6 py-3 text-right font-semibold">{peso(Number(x.total))}</td>
                 <td className="px-6 py-3 text-right whitespace-nowrap">
@@ -216,9 +197,7 @@ function QuoteDialog({ open, editing, products, onClose, onSave }: any) {
   const [walkInCar, setWalkInCar] = useState("");
   const [walkInPlate, setWalkInPlate] = useState("");
   const [discount, setDiscount] = useState(0);
-  const [validUntil, setValidUntil] = useState("");
   const [notes, setNotes] = useState("");
-  const [status, setStatus] = useState("draft");
   const [items, setItems] = useState<CartLine[]>([]);
   const [productSearch, setProductSearch] = useState("");
 
@@ -239,12 +218,10 @@ function QuoteDialog({ open, editing, products, onClose, onSave }: any) {
       setWalkInCar(editing.walk_in_car ?? (editing.vehicle ? `${editing.vehicle.make} ${editing.vehicle.model}` : ""));
       setWalkInPlate(editing.walk_in_plate ?? editing.vehicle?.plate_number ?? "");
       setDiscount(Number(editing.discount ?? 0));
-      setValidUntil(editing.valid_until ?? "");
       setNotes(editing.notes ?? "");
-      setStatus(editing.status ?? "draft");
     } else {
       setWalkInName(""); setWalkInCar(""); setWalkInPlate("");
-      setDiscount(0); setValidUntil(""); setNotes(""); setStatus("draft");
+      setDiscount(0); setNotes("");
       setItems([]);
     }
     setProductSearch("");
@@ -291,12 +268,12 @@ function QuoteDialog({ open, editing, products, onClose, onSave }: any) {
   const total = subtotal - Math.min(Math.max(0, discount), subtotal);
 
   function handleSave() {
-    if (!walkInName.trim()) return toast.error("Ilagay ang pangalan ng customer");
+    if (!walkInName.trim()) return toast.error("Please enter the customer name");
     onSave({
       walk_in_name: walkInName.trim() || null,
       walk_in_car: walkInCar.trim() || null,
       walk_in_plate: walkInPlate.trim().toUpperCase() || null,
-      discount, valid_until: validUntil || null, notes: notes || null, status,
+      discount, notes: notes || null,
       subtotal, tax: 0, total,
     }, items);
   }
@@ -345,13 +322,13 @@ function QuoteDialog({ open, editing, products, onClose, onSave }: any) {
                 <div className="relative">
                   <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input value={productSearch} onChange={(e) => setProductSearch(e.target.value)}
-                    placeholder="Hanapin ang product o SKU…"
+                    placeholder="Search product or SKU…"
                     className="w-full h-9 pl-8 pr-3 rounded-lg border border-border text-sm bg-background" />
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto" style={{ maxHeight: 280 }}>
                 {filteredProducts.length === 0 ? (
-                  <div className="text-center py-10 text-xs text-muted-foreground">Walang products na nahanap</div>
+                  <div className="text-center py-10 text-xs text-muted-foreground">No products found</div>
                 ) : (
                   <table className="w-full text-xs">
                     <thead className="sticky top-0 bg-secondary/90 text-muted-foreground uppercase tracking-wider">
@@ -391,12 +368,12 @@ function QuoteDialog({ open, editing, products, onClose, onSave }: any) {
             {/* Right: cart */}
             <div className="rounded-xl border border-border flex flex-col">
               <div className="px-3 py-2 border-b border-border bg-secondary/40 text-[10px] font-bold uppercase tracking-wider">
-                Items sa Quotation
+                Quotation Items
               </div>
               <div className="flex-1 overflow-y-auto p-2 space-y-1.5" style={{ maxHeight: 280 }}>
                 {items.length === 0 ? (
                   <div className="text-center py-10 text-xs text-muted-foreground leading-relaxed">
-                    Wala pang items.<br />Pumili mula sa catalog sa kaliwa.
+                    No items yet.<br />Select from the catalog on the left.
                   </div>
                 ) : items.map((it, idx) => (
                   <div key={idx} className="rounded-lg border border-border p-2 space-y-1.5 bg-background">
@@ -446,28 +423,12 @@ function QuoteDialog({ open, editing, products, onClose, onSave }: any) {
             </div>
           </div>
 
-          {/* Description of Work + meta */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
-              <label className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Description of Work</label>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
-                placeholder="Ilarawan ang gawaing gagawin…"
-                className="mt-1 w-full px-3 py-2 rounded-lg border border-border text-sm resize-none" />
-            </div>
-            <div className="space-y-2">
-              <div>
-                <label className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Valid Until</label>
-                <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)}
-                  className="mt-1 w-full h-10 px-3 rounded-lg border border-border text-sm" />
-              </div>
-              <div>
-                <label className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Status</label>
-                <select value={status} onChange={(e) => setStatus(e.target.value)}
-                  className="mt-1 w-full h-10 px-3 rounded-lg border border-border text-sm bg-background capitalize">
-                  {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-            </div>
+          {/* Description of Work */}
+          <div>
+            <label className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Description of Work</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
+              placeholder="Ilarawan ang gawaing gagawin…"
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-border text-sm resize-none" />
           </div>
 
           <button onClick={handleSave}
@@ -565,12 +526,6 @@ function PrintDialog({ quote, onClose }: any) {
                   <tr>
                     <td className="border border-zinc-400 bg-zinc-100 font-bold uppercase px-3 py-1">Customer ID</td>
                     <td className="border border-zinc-400 px-3 py-1 text-zinc-500">{quote.customer_id?.slice(0, 8) ?? "Walk-in"}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-zinc-400 bg-zinc-100 font-bold uppercase px-3 py-1 whitespace-nowrap">Valid Until</td>
-                    <td className="border border-zinc-400 px-3 py-1">
-                      {quote.valid_until ? fmtDate(quote.valid_until + "T00:00:00") : "—"}
-                    </td>
                   </tr>
                 </tbody>
               </table>

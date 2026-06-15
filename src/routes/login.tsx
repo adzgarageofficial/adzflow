@@ -162,6 +162,9 @@ function LoginPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [isLookingAtEachOther, setIsLookingAtEachOther] = useState(false);
   const [isPurplePeeking, setIsPurplePeeking] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [totpCode, setTotpCode] = useState("");
+  const [mfaFactorId, setMfaFactorId] = useState("");
 
   const purpleRef = useRef<HTMLDivElement>(null);
   const blackRef = useRef<HTMLDivElement>(null);
@@ -169,8 +172,12 @@ function LoginPage() {
   const orangeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/" });
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!data.session) return;
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      // Only redirect if MFA is fully satisfied (or no MFA enrolled yet)
+      if (aal && aal.currentLevel === aal.nextLevel) navigate({ to: "/" });
+      // If AAL1 but needs AAL2 → stay here, user must complete TOTP step
     });
   }, [navigate]);
 
@@ -258,10 +265,37 @@ function LoginPage() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+
+      const { data: factors } = await supabase.auth.mfa.listFactors();
+      const verifiedTotp = (factors?.totp ?? []).filter((f) => f.status === "verified");
+
+      if (verifiedTotp.length > 0) {
+        setMfaFactorId(verifiedTotp[0].id);
+        setStep(2);
+      } else {
+        navigate({ to: "/setup-2fa" });
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Authentication failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTotpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.mfa.challengeAndVerify({
+        factorId: mfaFactorId,
+        code: totpCode,
+      });
+      if (error) throw error;
       toast.success("Welcome back!");
       navigate({ to: "/" });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Authentication failed");
+      toast.error(err instanceof Error ? err.message : "Mali ang code. Subukan ulit.");
+      setTotpCode("");
     } finally {
       setLoading(false);
     }
@@ -277,7 +311,7 @@ function LoginPage() {
         <div className="relative z-20">
           <div className="flex items-center gap-2 text-lg font-semibold">
             <div className="size-10 rounded-lg bg-black flex items-center justify-center overflow-hidden">
-              <img src={adzLogo} alt="ADZ Garage" className="w-full h-full object-cover" />
+              <img src={adzLogo} alt="ADZ Garage" className="w-full h-full object-contain" />
             </div>
             <span>ADZ Garage</span>
           </div>
@@ -446,71 +480,119 @@ function LoginPage() {
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center justify-center gap-2 text-lg font-semibold mb-12">
             <div className="size-10 rounded-lg bg-black flex items-center justify-center overflow-hidden">
-              <img src={adzLogo} alt="ADZ Garage" className="w-full h-full object-cover" />
+              <img src={adzLogo} alt="ADZ Garage" className="w-full h-full object-contain" />
             </div>
             <span>ADZ Garage</span>
           </div>
 
-          <div className="text-center mb-10">
-            <h1 className="text-3xl font-bold tracking-tight mb-2">Welcome back!</h1>
-            <p className="text-muted-foreground text-sm">Please enter your details</p>
-          </div>
+          {step === 1 ? (
+            <>
+              <div className="text-center mb-10">
+                <h1 className="text-3xl font-bold tracking-tight mb-2">Welcome back!</h1>
+                <p className="text-muted-foreground text-sm">Please enter your details</p>
+              </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@adzgarage.ph"
-                value={email}
-                autoComplete="off"
-                onChange={(e) => setEmail(e.target.value)}
-                onFocus={() => setIsTyping(true)}
-                onBlur={() => setIsTyping(false)}
-                required
-                className="h-12 bg-background border-border/60 focus:border-primary"
-              />
-            </div>
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@adzgarage.ph"
+                    value={email}
+                    autoComplete="off"
+                    onChange={(e) => setEmail(e.target.value)}
+                    onFocus={() => setIsTyping(true)}
+                    onBlur={() => setIsTyping(false)}
+                    required
+                    className="h-12 bg-background border-border/60 focus:border-primary"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-              <div className="relative">
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      className="h-12 pr-10 bg-background border-border/60 focus:border-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox id="remember" />
+                    <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
+                      Remember for 30 days
+                    </Label>
+                  </div>
+                  <a href="#" className="text-sm text-primary hover:underline font-medium">
+                    Forgot password?
+                  </a>
+                </div>
+
+                <Button type="submit" className="w-full h-12 text-base font-medium" size="lg" disabled={loading}>
+                  {loading ? "Signing in..." : "Log in"}
+                </Button>
+              </form>
+            </>
+          ) : (
+            <form onSubmit={handleTotpSubmit} className="space-y-5">
+              <div className="text-center mb-10">
+                <h1 className="text-3xl font-bold tracking-tight mb-2">2-Step Verification</h1>
+                <p className="text-muted-foreground text-sm">
+                  Buksan ang iyong authenticator app at i-enter ang 6-digit na code.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="totp" className="text-sm font-medium">Authenticator code</Label>
                 <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  id="totp"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+                  className="h-12 text-center text-2xl tracking-[0.5em] font-mono bg-background border-border/60 focus:border-primary"
+                  autoComplete="one-time-code"
+                  autoFocus
                   required
-                  className="h-12 pr-10 bg-background border-border/60 focus:border-primary"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
-                </button>
               </div>
-            </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Checkbox id="remember" />
-                <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
-                  Remember for 30 days
-                </Label>
-              </div>
-              <a href="#" className="text-sm text-primary hover:underline font-medium">
-                Forgot password?
-              </a>
-            </div>
+              <Button
+                type="submit"
+                className="w-full h-12 text-base font-medium"
+                size="lg"
+                disabled={loading || totpCode.length !== 6}
+              >
+                {loading ? "Vini-verify…" : "Verify"}
+              </Button>
 
-            <Button type="submit" className="w-full h-12 text-base font-medium" size="lg" disabled={loading}>
-              {loading ? "Signing in..." : "Log in"}
-            </Button>
-          </form>
+              <button
+                type="button"
+                onClick={() => { setStep(1); setTotpCode(""); }}
+                className="w-full text-sm text-muted-foreground hover:text-foreground text-center transition-colors"
+              >
+                ← Bumalik sa login
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>

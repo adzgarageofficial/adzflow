@@ -102,7 +102,7 @@ function CrmPage() {
         {isLoading ? (
           <div className="px-6 py-10 text-center text-muted-foreground">Loading…</div>
         ) : filtered.length === 0 ? (
-          <div className="px-6 py-14 text-center text-muted-foreground">Walang interactions pa.</div>
+          <div className="px-6 py-14 text-center text-muted-foreground">No interactions yet.</div>
         ) : (
           <ul className="divide-y divide-border">
             {filtered.map((i: any) => {

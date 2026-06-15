@@ -44,54 +44,54 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
 
   return (
     <header className="sticky top-0 z-20 glass border-b border-border">
-      <div className="flex items-center gap-3 px-4 md:px-6 h-[60px] md:h-[68px]">
+      <div className="flex items-center gap-3 px-4 md:px-6 h-[60px] md:h-[66px]">
         <MobileNavTrigger />
         <div className="min-w-0">
-          <h1 className="text-[15px] md:text-[17px] font-semibold tracking-tight truncate">{title}</h1>
+          <h1 className="text-[15px] md:text-[16px] font-bold tracking-tight truncate">{title}</h1>
           {subtitle && (
-            <p className="hidden sm:block text-xs text-muted-foreground truncate">{subtitle}</p>
+            <p className="hidden sm:block text-[11px] text-muted-foreground/70 truncate mt-0.5">{subtitle}</p>
           )}
         </div>
 
-        <div className="ml-auto flex items-center gap-2 md:gap-3">
+        <div className="ml-auto flex items-center gap-1.5 md:gap-2">
           <button
             onClick={() => setSearchOpen(true)}
-            className="hidden md:flex items-center gap-2 h-10 w-[320px] rounded-xl border border-border bg-card/60 px-3 shadow-soft text-left hover:bg-secondary/60 transition"
+            className="hidden md:flex items-center gap-2 h-9 w-[280px] rounded-xl border border-border bg-secondary/40 px-3 shadow-soft text-left hover:bg-secondary/70 transition-all"
           >
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <span className="flex-1 text-sm text-muted-foreground truncate">Search products, orders, customers…</span>
-            <kbd className="hidden lg:inline-flex items-center gap-1 text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5">
-              <Command className="h-3 w-3" /> K
+            <Search className="h-3.5 w-3.5 text-muted-foreground/60" />
+            <span className="flex-1 text-[13px] text-muted-foreground/60 truncate">Search…</span>
+            <kbd className="hidden lg:inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/40 border border-border/60 rounded px-1.5 py-0.5 font-mono">
+              <Command className="h-2.5 w-2.5" /> K
             </kbd>
           </button>
           <button
             onClick={() => setSearchOpen(true)}
             aria-label="Search"
-            className="md:hidden h-10 w-10 rounded-xl border border-border bg-card/60 grid place-items-center shadow-soft hover:bg-secondary transition"
+            className="md:hidden h-9 w-9 rounded-xl border border-border bg-secondary/40 grid place-items-center hover:bg-secondary/70 transition"
           >
-            <Search className="h-4 w-4" />
+            <Search className="h-3.5 w-3.5" />
           </button>
           <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
 
           <span
             className={cn(
-              "hidden sm:inline-flex items-center gap-1.5 text-[11px] font-medium rounded-full px-2.5 py-1 border",
+              "hidden sm:inline-flex items-center gap-1.5 text-[10px] font-semibold rounded-full px-2.5 py-1 border",
               online
-                ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:text-emerald-300"
-                : "bg-amber-500/15 text-amber-600 border-amber-500/30 dark:text-amber-300",
+                ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                : "bg-amber-500/10 text-amber-500 border-amber-500/20",
             )}
           >
             {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-            {online ? "Online" : "Offline mode"}
+            {online ? "Online" : "Offline"}
           </span>
 
           <button
             onClick={toggle}
             aria-label="Toggle theme"
             title={theme === "dark" ? "Switch to light" : "Switch to dark"}
-            className="relative h-10 w-10 rounded-xl border border-border bg-card/60 grid place-items-center shadow-soft hover:bg-secondary transition text-foreground"
+            className="h-9 w-9 rounded-xl border border-border bg-secondary/40 grid place-items-center hover:bg-secondary/70 transition text-muted-foreground hover:text-foreground"
           >
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           </button>
 
           <NotificationBell />
@@ -103,9 +103,9 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
                 window.dispatchEvent(new CustomEvent("pos:new-sale"));
               }
             }}
-            className="inline-flex items-center gap-2 h-10 px-3.5 rounded-xl bg-gradient-red text-primary-foreground text-sm font-semibold shadow-glow hover:opacity-95 transition"
+            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-gradient-red text-primary-foreground text-[13px] font-bold shadow-glow hover:opacity-90 transition-all"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             <span className="hidden md:inline">New Sale</span>
           </Link>
         </div>

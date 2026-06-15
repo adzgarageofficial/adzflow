@@ -102,7 +102,7 @@ function PayrollPage() {
 
   const generatePayslips = async (period: any) => {
     if (!employees.length) {
-      toast.error("Walang employees pa.");
+      toast.error("No employees found.");
       return;
     }
     setGenerating(true);
@@ -270,7 +270,7 @@ function PayrollPage() {
           </div>
           {periods.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
-              Walang periods pa. Create your first.
+              No payroll periods yet. Create your first.
             </div>
           ) : (
             periods.map((p: any) => (
@@ -374,7 +374,7 @@ function PayrollPage() {
                     {payslips.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="text-center py-10 text-muted-foreground">
-                          Walang payslips pa. Click "Generate Payslips" para mag-auto compute.
+                          No payslips yet. Click "Generate Payslips" to auto-compute.
                         </td>
                       </tr>
                     ) : (

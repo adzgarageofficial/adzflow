@@ -93,7 +93,7 @@ function NotificationsPage() {
         {!isLoading && filtered.length === 0 && (
           <div className="p-12 text-center text-muted-foreground">
             <Bell className="h-10 w-10 mx-auto mb-2 opacity-40" />
-            <div className="text-sm">Walang notifications.</div>
+            <div className="text-sm">No notifications.</div>
           </div>
         )}
         {filtered.map((n: any) => {

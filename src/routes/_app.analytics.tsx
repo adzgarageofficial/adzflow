@@ -62,7 +62,7 @@ function buildRevenueSeries(orders: any[], from: Date, to: Date) {
 
   const fromKey = format(from, "yyyy-MM-dd");
   const toKey = format(to, "yyyy-MM-dd");
-  const inRange = (orders as any[]).filter((o) => o.status !== "cancelled" && inDateRange(o.created_at, fromKey, toKey));
+  const inRange = (orders as any[]).filter((o) => o.status === "paid" && inDateRange(o.created_at, fromKey, toKey));
 
   let series: { label: string; revenue: number; orders: number }[];
 
@@ -121,7 +121,7 @@ function buildProductBreakdown(orderItems: any[], from: Date, to: Date) {
   const toKey = format(to, "yyyy-MM-dd");
   const inRange = (orderItems as any[]).filter((it) => {
     const o = it.order;
-    return o && o.status !== "cancelled" && inDateRange(o.created_at, fromKey, toKey);
+    return o && o.status === "paid" && inDateRange(o.created_at, fromKey, toKey);
   });
 
   const byProduct = new Map<string, { name: string; sold: number; revenue: number }>();

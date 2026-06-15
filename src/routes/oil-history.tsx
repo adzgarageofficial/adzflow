@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import adzLogo from "@/assets/adz-logo.png";
 import { useState } from "react";
-import { Search, Droplets, Calendar, Gauge, Car, CalendarPlus, X } from "lucide-react";
+import { Search, Droplets, Calendar, Gauge, Car, CalendarPlus, X, Phone, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -42,9 +42,52 @@ function OilHistoryPage() {
   const [saving, setSaving] = useState(false);
   const [bookingDone, setBookingDone] = useState<string | null>(null);
 
+  // Direct booking (no search required)
+  const [showDirectBook, setShowDirectBook] = useState(false);
+  const [directName, setDirectName] = useState("");
+  const [directPhone, setDirectPhone] = useState("");
+  const [directPlate, setDirectPlate] = useState("");
+  const [directDate, setDirectDate] = useState("");
+  const [directNotes, setDirectNotes] = useState("");
+  const [directSaving, setDirectSaving] = useState(false);
+  const [directDone, setDirectDone] = useState<string | null>(null);
+
+  async function saveDirectBooking() {
+    if (!directName.trim() || !directDate) {
+      toast.error("Please fill in your name and preferred date.");
+      return;
+    }
+    setDirectSaving(true);
+    try {
+      const { data, error } = await supabase.rpc("public_book_appointment_direct", {
+        p_name: directName.trim(),
+        p_phone: directPhone.trim() || null,
+        p_plate: directPlate.trim() || null,
+        p_scheduled_at: new Date(directDate).toISOString(),
+        p_notes: directNotes || null,
+      });
+      if (error) throw error;
+      setDirectDone(data as string);
+    } catch (e: any) {
+      toast.error(e.message ?? "Booking failed");
+    } finally {
+      setDirectSaving(false);
+    }
+  }
+
+  function closeDirectBook() {
+    setShowDirectBook(false);
+    setDirectName("");
+    setDirectPhone("");
+    setDirectPlate("");
+    setDirectDate("");
+    setDirectNotes("");
+    setDirectDone(null);
+  }
+
   async function handleSearch() {
     if (!surname.trim() || !plate.trim()) {
-      toast.error("Ilagay ang surname at plate number.");
+      toast.error("Please enter the surname and plate number.");
       return;
     }
     setLoading(true);
@@ -73,7 +116,7 @@ function OilHistoryPage() {
   }
 
   async function saveBooking() {
-    if (!scheduledAt || !bookingFor) return toast.error("Piliin ang petsa at oras.");
+    if (!scheduledAt || !bookingFor) return toast.error("Please select a date and time.");
     setSaving(true);
     try {
       const { data, error } = await supabase.rpc("public_book_appointment", {
@@ -100,9 +143,119 @@ function OilHistoryPage() {
           <img src={adzLogo} alt="ADZ Garage" className="mx-auto h-12 w-12 rounded-2xl object-cover mb-3" />
           <h1 className="text-2xl font-bold tracking-tight">Oil Change History</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            I-search ang inyong huling oil change gamit ang surname at plate number.
+            Look up your last oil change using your surname and plate number.
           </p>
+          <button
+            onClick={() => { setShowDirectBook(true); setDirectDone(null); }}
+            className="mt-4 h-11 px-6 rounded-xl bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center gap-2 hover:opacity-95 shadow-sm"
+          >
+            <CalendarPlus className="h-4 w-4" /> Book an Appointment
+          </button>
         </div>
+
+        {/* Direct booking modal */}
+        {showDirectBook && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+            <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-xl overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <CalendarPlus className="h-4 w-4 text-primary" />
+                  <span className="font-semibold text-sm">Book an Appointment</span>
+                </div>
+                <button onClick={closeDirectBook} className="h-7 w-7 rounded-lg hover:bg-secondary inline-flex items-center justify-center">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-5">
+                {directDone ? (
+                  <div className="text-center space-y-2 py-4">
+                    <div className="h-12 w-12 rounded-full bg-green-100 text-green-600 text-2xl grid place-items-center mx-auto">✓</div>
+                    <p className="font-semibold text-sm mt-2">Booking confirmed!</p>
+                    <p className="text-xs text-muted-foreground">
+                      Booking #: <span className="font-mono font-bold">{directDone}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Our staff will reach out to confirm your appointment.
+                    </p>
+                    <button
+                      onClick={closeDirectBook}
+                      className="mt-3 h-9 px-6 rounded-lg border border-border text-sm"
+                    >
+                      Close
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground block mb-1">
+                        <span className="inline-flex items-center gap-1"><User className="h-3 w-3" /> Full Name</span> <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        value={directName}
+                        onChange={(e) => setDirectName(e.target.value)}
+                        placeholder="e.g. Juan Dela Cruz"
+                        className="w-full h-10 px-3 rounded-xl border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground block mb-1">
+                        <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" /> Phone Number</span>
+                      </label>
+                      <input
+                        value={directPhone}
+                        onChange={(e) => setDirectPhone(e.target.value)}
+                        placeholder="e.g. 09171234567"
+                        className="w-full h-10 px-3 rounded-xl border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground block mb-1">
+                        Plate Number
+                      </label>
+                      <input
+                        value={directPlate}
+                        onChange={(e) => setDirectPlate(e.target.value)}
+                        placeholder="e.g. ABC 1234"
+                        className="w-full h-10 px-3 rounded-xl border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground block mb-1">
+                        Preferred Date & Time <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={directDate}
+                        onChange={(e) => setDirectDate(e.target.value)}
+                        className="w-full h-10 px-3 rounded-xl border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground block mb-1">
+                        Notes (optional)
+                      </label>
+                      <textarea
+                        value={directNotes}
+                        onChange={(e) => setDirectNotes(e.target.value)}
+                        rows={2}
+                        placeholder="Any requests or concerns…"
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <button
+                      onClick={saveDirectBooking}
+                      disabled={directSaving}
+                      className="w-full h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center justify-center gap-2 hover:opacity-95 disabled:opacity-50"
+                    >
+                      <CalendarPlus className="h-4 w-4" />
+                      {directSaving ? "Saving…" : "Confirm Booking"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Search panel */}
         <div className="rounded-2xl border border-border bg-card shadow-soft p-5 mb-6">
@@ -138,7 +291,7 @@ function OilHistoryPage() {
             className="w-full h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center justify-center gap-2 hover:opacity-95 disabled:opacity-50"
           >
             <Search className="h-4 w-4" />
-            {loading ? "Hinahanap…" : "Hanapin"}
+            {loading ? "Searching…" : "Search"}
           </button>
         </div>
 
@@ -147,8 +300,8 @@ function OilHistoryPage() {
           results.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Car className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="font-semibold text-sm">Walang nahanap.</p>
-              <p className="text-xs mt-1">I-check ang spelling ng surname o plate number.</p>
+              <p className="font-semibold text-sm">No results found.</p>
+              <p className="text-xs mt-1">Check the spelling of the surname or plate number.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -204,7 +357,7 @@ function OilHistoryPage() {
                           )}
                         </dl>
                       ) : (
-                        <p className="text-xs text-muted-foreground text-center py-2">Walang recorded service pa.</p>
+                        <p className="text-xs text-muted-foreground text-center py-2">No recorded services yet.</p>
                       )}
                     </div>
 
@@ -230,7 +383,7 @@ function OilHistoryPage() {
                             Booking #: <span className="font-mono font-bold">{bookingDone}</span>
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Makikipag-ugnayan ang aming staff para sa kumpirmasyon.
+                            Our staff will reach out to confirm your booking.
                           </p>
                           <button
                             onClick={() => setBookingFor(null)}

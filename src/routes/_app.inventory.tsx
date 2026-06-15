@@ -3,13 +3,13 @@ import { PageShell } from "@/components/page-shell";
 import { SubNav, CATALOG_NAV } from "@/components/sub-nav";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useInventoryLevels, useProducts, useWarehouses, useSuppliers,
-  usePurchaseOrders, useStockMovements, useInsert, useUpdate, useDelete, useNotifications, peso, useIsOwner } from "@/lib/db";
+  usePurchaseOrders, useStockMovements, useInsert, useUpdate, useDelete, useNotifications, peso, useIsOwner, computeCost } from "@/lib/db";
 import { useRbac } from "@/lib/rbac";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Boxes, AlertTriangle, Layers, Search, Plus,
-  Archive, TrendingUp, Edit2, Trash2, Wallet, Download, Upload, Info,
+  Archive, TrendingUp, Edit2, Trash2, Download, Upload, Info,
 } from "lucide-react";
 import { downloadExcel } from "@/lib/export-excel";
 import { format } from "date-fns";
@@ -30,6 +30,7 @@ type Tab = "Stock" | "Movements" | "Purchase Orders" | "Suppliers" | "Warehouses
 function Inventory() {
   const { can } = useRbac();
   const canViewPrices = can("finance", "view");
+  const isOwner = useIsOwner();
 
   const [tab, setTab] = useState<Tab>("Stock");
   const [adjustOpen, setAdjustOpen] = useState<any | null>(null);
@@ -45,7 +46,12 @@ function Inventory() {
     const low = levels.filter((r: any) => r.quantity > 0 && r.quantity <= (r.reorder_point || 0)).length;
     const out = levels.filter((r: any) => r.quantity <= 0).length;
     const reserved = levels.reduce((s: number, r: any) => s + (r.reserved_quantity || 0), 0);
-    const totalCost = levels.reduce((s: number, r: any) => s + (r.quantity || 0) * Number(r.product?.cost_price || 0), 0);
+    const totalCost = levels.reduce((s: number, r: any) => {
+      const srp = Number(r.product?.retail_price || r.product?.base_price || 0);
+      const dc: number[] = Array.isArray(r.product?.brand?.discount_chain) ? r.product.brand.discount_chain : [];
+      const cost = dc.length > 0 ? computeCost(srp, dc) : Number(r.product?.cost_price || 0);
+      return s + (r.quantity || 0) * cost;
+    }, 0);
     const totalRetail = levels.reduce((s: number, r: any) => s + (r.quantity || 0) * Number(r.product?.retail_price || r.product?.base_price || 0), 0);
     return { totalUnits, low, out, reserved, skus: levels.length, totalCost, totalRetail };
   }, [levels]);
@@ -59,9 +65,7 @@ function Inventory() {
         onSelect={(id) => { setTab("Stock"); setHighlightId(id); }}
       />
 
-      <div className={`grid grid-cols-2 ${canViewPrices ? "md:grid-cols-4" : "md:grid-cols-2"} gap-4 mt-4`}>
-        {canViewPrices && <Kpi label="Inventory Value (Cost)" value={peso(k.totalCost)} icon={Wallet} />}
-        {canViewPrices && <Kpi label="Inventory Value (Retail)" value={peso(k.totalRetail)} icon={TrendingUp} />}
+      <div className="grid grid-cols-2 gap-4 mt-4">
         <Kpi label="Total Units" value={k.totalUnits.toLocaleString()} icon={Layers} />
         <Kpi label="SKUs Tracked" value={k.skus} icon={Boxes} />
       </div>
@@ -124,7 +128,7 @@ function Inventory() {
       </div>
 
       <div className="mt-5">
-        {tab === "Stock" && <StockTab levels={levels} onAdjust={setAdjustOpen} highlightId={highlightId} onHighlighted={() => setHighlightId(null)} />}
+        {tab === "Stock" && <StockTab levels={levels} onAdjust={setAdjustOpen} highlightId={highlightId} onHighlighted={() => setHighlightId(null)} isOwner={isOwner} />}
         {tab === "Movements" && <MovementsTab />}
         {tab === "Purchase Orders" && <POTab />}
         {tab === "Suppliers" && <SuppliersTab />}
@@ -284,7 +288,7 @@ function StockAlertBanner({ levels, showOOS }: { levels: any[]; showOOS: boolean
 function useStockAlertNotifications(levels: any[]) {
   const canCreate = useIsOwner();
   const { data: notifs = [] } = useNotifications();
-  const insert = useInsert<any>("notifications");
+  const qc = useQueryClient();
   const alerted = useRef(new Set<string>());
 
   useEffect(() => {
@@ -292,34 +296,44 @@ function useStockAlertNotifications(levels: any[]) {
     const openLinks = new Set(
       (notifs as any[]).filter((n) => !n.read_at && n.category === "inventory").map((n) => n.link),
     );
-    for (const r of levels as any[]) {
-      const isOut = r.quantity <= 0;
-      const isLow = !isOut && r.reorder_point > 0 && r.quantity <= r.reorder_point;
-      if (!isOut && !isLow) continue;
 
-      const link = `/inventory?alert=${isOut ? "out" : "low"}&level=${r.id}`;
-      if (alerted.current.has(link) || openLinks.has(link)) continue;
-      alerted.current.add(link);
+    const run = async () => {
+      for (const r of levels as any[]) {
+        const isOut = r.quantity <= 0;
+        const isLow = !isOut && r.reorder_point > 0 && r.quantity <= r.reorder_point;
+        if (!isOut && !isLow) continue;
 
-      const name = r.product?.name ?? "A product";
-      const sku = r.product?.sku ? ` (${r.product.sku})` : "";
-      const where = r.warehouse?.name ? ` at ${r.warehouse.name}` : "";
-      insert.mutate({
-        title: isOut ? `Out of stock: ${r.product?.name ?? "Product"}` : `Low stock: ${r.product?.name ?? "Product"}`,
-        body: isOut
-          ? `${name}${sku}${where} has run out of stock. Restock soon to avoid missed sales.`
-          : `${name}${sku}${where} is running low — ${r.quantity} unit${r.quantity === 1 ? "" : "s"} left, reorder point is ${r.reorder_point}.`,
-        severity: isOut ? "error" : "warning",
-        category: "inventory",
-        link,
-        audience_role: "inventory",
-      });
-    }
+        const link = `/inventory?alert=${isOut ? "out" : "low"}&level=${r.id}`;
+        if (alerted.current.has(link) || openLinks.has(link)) continue;
+        alerted.current.add(link);
+
+        const name = r.product?.name ?? "A product";
+        const sku = r.product?.sku ? ` (${r.product.sku})` : "";
+        const where = r.warehouse?.name ? ` at ${r.warehouse.name}` : "";
+        try {
+          const { error } = await supabase.from("notifications" as any).insert({
+            title: isOut ? `Out of stock: ${r.product?.name ?? "Product"}` : `Low stock: ${r.product?.name ?? "Product"}`,
+            body: isOut
+              ? `${name}${sku}${where} has run out of stock. Restock soon to avoid missed sales.`
+              : `${name}${sku}${where} is running low — ${r.quantity} unit${r.quantity === 1 ? "" : "s"} left, reorder point is ${r.reorder_point}.`,
+            severity: isOut ? "error" : "warning",
+            category: "inventory",
+            link,
+            audience_role: "inventory",
+          });
+          if (!error) qc.invalidateQueries({ queryKey: ["notifications"] });
+        } catch {
+          // silent — RLS may block depending on session context
+        }
+      }
+    };
+
+    run();
   }, [levels, notifs, canCreate]);
 }
 
 /* ---------- Stock ---------- */
-function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: any[]; onAdjust: (r: any) => void; highlightId?: string | null; onHighlighted?: () => void }) {
+function StockTab({ levels, onAdjust, highlightId, onHighlighted, isOwner }: { levels: any[]; onAdjust: (r: any) => void; highlightId?: string | null; onHighlighted?: () => void; isOwner?: boolean }) {
   const { can } = useRbac();
   const canViewPrices = can("finance", "view");
   const [q, setQ] = useState("");
@@ -363,7 +377,13 @@ function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: an
   const totals = useMemo(() => {
     const units = filtered.reduce((s, r: any) => s + (r.quantity || 0), 0);
     const srp = filtered.reduce((s, r: any) => s + (r.quantity || 0) * Number(r.product?.retail_price || r.product?.base_price || 0), 0);
-    return { units, srp };
+    const cost = filtered.reduce((s, r: any) => {
+      const price = Number(r.product?.retail_price || r.product?.base_price || 0);
+      const dc: number[] = Array.isArray(r.product?.brand?.discount_chain) ? r.product.brand.discount_chain : [];
+      const c = dc.length > 0 ? computeCost(price, dc) : Number(r.product?.cost_price || 0);
+      return s + (r.quantity || 0) * c;
+    }, 0);
+    return { units, srp, cost };
   }, [filtered]);
 
   return (
@@ -395,26 +415,34 @@ function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: an
           </button>
         </div>
         <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-[11px] uppercase tracking-wider text-muted-foreground bg-secondary/60">
+        <table className="w-full text-xs">
+          <thead className="text-[10px] uppercase tracking-wider text-muted-foreground bg-secondary/60">
             <tr>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">ITEM CODE</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">BRAND</th>
-              <th className="text-left font-semibold px-4 py-3">DESCRIPTION</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">UOM</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">LOCATION</th>
-              {canViewPrices && <th className="text-right font-semibold px-4 py-3 whitespace-nowrap">SRP</th>}
-              <th className="text-right font-semibold px-4 py-3 whitespace-nowrap">QTY</th>
-              <th className="text-right font-semibold px-4 py-3 whitespace-nowrap">REORDER PT.</th>
-              <th className="px-4 py-3"></th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">ITEM CODE</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">BRAND</th>
+              <th className="text-left font-semibold px-2 py-2">DESCRIPTION</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">UOM</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">COLOR</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">LOCATION</th>
+              {canViewPrices && <th className="text-right font-semibold px-2 py-2 whitespace-nowrap">SRP</th>}
+              {isOwner && <th className="text-right font-semibold px-2 py-2 whitespace-nowrap">COST</th>}
+              {isOwner && <th className="text-right font-semibold px-2 py-2 whitespace-nowrap">MARGIN</th>}
+              <th className="text-right font-semibold px-2 py-2 whitespace-nowrap">QTY</th>
+              <th className="text-right font-semibold px-2 py-2 whitespace-nowrap">REORDER</th>
+              <th className="px-2 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={canViewPrices ? 9 : 8} className="text-center px-6 py-10 text-muted-foreground">No stock records. Add one to get started.</td></tr>
+              <tr><td colSpan={9 + (canViewPrices ? 1 : 0) + (isOwner ? 2 : 0)} className="text-center px-6 py-10 text-muted-foreground">No stock records. Add one to get started.</td></tr>
             ) : filtered.map((r) => {
               const qtyColor = r.quantity <= 0 ? "text-rose-600 font-bold" : r.quantity <= r.reorder_point ? "text-amber-600 font-semibold" : "font-semibold";
               const uom = (r.product?.specs as any)?.uom ?? "—";
+              const color = (r.product?.specs as any)?.color ?? "—";
+              const srp = Number(r.product?.retail_price || r.product?.base_price || 0);
+              const dc: number[] = Array.isArray(r.product?.brand?.discount_chain) ? r.product.brand.discount_chain : [];
+              const cost = dc.length > 0 ? computeCost(srp, dc) : Number(r.product?.cost_price || 0);
+              const margin = srp > 0 && cost > 0 ? ((srp - cost) / srp) * 100 : 0;
               return (
                 <tr
                   key={r.id}
@@ -422,19 +450,22 @@ function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: an
                   onClick={() => onAdjust(r)}
                   className={`border-t border-border hover:bg-secondary/40 transition-colors duration-700 cursor-pointer ${highlightId === r.id ? "bg-amber-100/70" : ""}`}
                 >
-                  <td className="px-4 py-2.5 font-mono text-xs font-semibold text-muted-foreground whitespace-nowrap">{r.product?.sku ?? "—"}</td>
-                  <td className="px-4 py-2.5 font-medium whitespace-nowrap">{r.product?.brand?.name ?? "—"}</td>
-                  <td className="px-4 py-2.5 max-w-[280px]" title={[r.product?.category?.name, r.product?.description].filter(Boolean).join(" · ")}>
+                  <td className="px-2 py-1.5 font-mono font-semibold text-muted-foreground whitespace-nowrap">{r.product?.sku ?? "—"}</td>
+                  <td className="px-2 py-1.5 font-medium whitespace-nowrap">{r.product?.brand?.name ?? "—"}</td>
+                  <td className="px-2 py-1.5 max-w-[200px]" title={[r.product?.category?.name, r.product?.description].filter(Boolean).join(" · ")}>
                     <div className="truncate">{r.product?.description ?? r.product?.name ?? "—"}</div>
-                    {r.product?.category?.name && <div className="text-[11px] text-muted-foreground truncate">{r.product?.category?.name}</div>}
+                    {r.product?.category?.name && <div className="text-[10px] text-muted-foreground truncate">{r.product?.category?.name}</div>}
                   </td>
-                  <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{uom}</td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">{r.warehouse?.name ?? "—"}</td>
-                  {canViewPrices && <td className="px-4 py-2.5 text-right whitespace-nowrap">{r.product?.retail_price || r.product?.base_price ? peso(Number(r.product?.retail_price || r.product?.base_price)) : "—"}</td>}
-                  <td className={`px-4 py-2.5 text-right whitespace-nowrap ${qtyColor}`}>{r.quantity}</td>
-                  <td className="px-4 py-2.5 text-right text-muted-foreground whitespace-nowrap">{r.reorder_point || "—"}</td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button onClick={() => onAdjust(r)} className="text-xs font-semibold text-primary hover:underline whitespace-nowrap">Stock In/Out</button>
+                  <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{uom}</td>
+                  <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{color}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">{r.warehouse?.name ?? "—"}</td>
+                  {canViewPrices && <td className="px-2 py-1.5 text-right whitespace-nowrap">{srp > 0 ? peso(srp) : "—"}</td>}
+                  {isOwner && <td className="px-2 py-1.5 text-right whitespace-nowrap text-muted-foreground">{cost > 0 ? peso(cost) : "—"}</td>}
+                  {isOwner && <td className="px-2 py-1.5 text-right whitespace-nowrap font-semibold text-emerald-600">{margin > 0 ? `${margin.toFixed(1)}%` : "—"}</td>}
+                  <td className={`px-2 py-1.5 text-right whitespace-nowrap ${qtyColor}`}>{r.quantity}</td>
+                  <td className="px-2 py-1.5 text-right text-muted-foreground whitespace-nowrap">{r.reorder_point || "—"}</td>
+                  <td className="px-2 py-1.5 text-right">
+                    <button onClick={() => onAdjust(r)} className="font-semibold text-primary hover:underline whitespace-nowrap">Stock In/Out</button>
                   </td>
                 </tr>
               );
@@ -443,13 +474,18 @@ function StockTab({ levels, onAdjust, highlightId, onHighlighted }: { levels: an
           {filtered.length > 0 && (
             <tfoot className="bg-secondary/40 border-t-2 border-border">
               <tr>
-                <td className="px-4 py-3 font-bold text-xs uppercase" colSpan={canViewPrices ? 6 : 5}>TOTAL</td>
-                <td className="px-4 py-3 text-right font-bold">{totals.units.toLocaleString()}</td>
-                {canViewPrices
-                  ? <td className="px-4 py-3 text-right text-xs text-muted-foreground">SRP Value: {peso(totals.srp)}</td>
-                  : <td className="px-4 py-3"></td>
+                <td className="px-2 py-2 font-bold uppercase" colSpan={6 + (canViewPrices ? 1 : 0) + (isOwner ? 2 : 0)}>TOTAL</td>
+                <td className="px-2 py-2 text-right font-bold">{totals.units.toLocaleString()}</td>
+                {isOwner
+                  ? <td className="px-2 py-2 text-right">
+                      <span className="text-emerald-700 font-semibold">Cost: {peso(totals.cost)}</span>
+                      <span className="text-muted-foreground ml-1">/ SRP: {peso(totals.srp)}</span>
+                    </td>
+                  : canViewPrices
+                    ? <td className="px-2 py-2 text-right text-muted-foreground">SRP: {peso(totals.srp)}</td>
+                    : <td className="px-2 py-2"></td>
                 }
-                <td className="px-4 py-3"></td>
+                <td className="px-2 py-2"></td>
               </tr>
             </tfoot>
           )}
@@ -573,87 +609,224 @@ function AdjustDialog({ row, onClose }: { row: any | null; onClose: () => void }
   );
 }
 
-/* ---------- New Stock Record — Excel WHSE BEGINNING format ---------- */
+/* ---------- New Stock Record ---------- */
 function NewStockDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data: products = [] } = useProducts();
   const { data: warehouses = [] } = useWarehouses();
-  const [productId, setProductId] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
-  const [quantity, setQuantity] = useState(0);
-  const [reorder, setReorder] = useState(0);
-  const ins = useInsert("inventory_levels");
+  const qc = useQueryClient();
 
-  const selectedProduct = (products as any[]).find((p) => p.id === productId);
-  const uom = (selectedProduct?.specs as any)?.uom ?? "";
+  const EMPTY = { itemCode: "", brand: "", description: "", uom: "", color: "", location: "", srp: "", discountedPrice: "", qty: "", reorder: "" };
+  const [f, setF] = useState(EMPTY);
+  const [busy, setBusy] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  function reset() {
-    setProductId(""); setWarehouseId(""); setQuantity(0); setReorder(0);
+  function handleImageSelect(file: File) {
+    if (!file.type.startsWith("image/")) return toast.error("Please select an image file");
+    if (file.size > 5 * 1024 * 1024) return toast.error("Image must be under 5 MB");
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setImagePreview(e.target?.result as string);
+    reader.readAsDataURL(file);
   }
+
+  function clearImage() { setImageFile(null); setImagePreview(null); }
+
+  const set = (k: keyof typeof EMPTY, v: string) => setF((p) => ({ ...p, [k]: v }));
+
+  // Auto-fill when item code matches an existing product
+  const matched = (products as any[]).find((p) => p.sku?.toLowerCase() === f.itemCode.trim().toLowerCase());
+  const prevCode = useRef("");
+  useEffect(() => {
+    if (!matched || matched.sku === prevCode.current) return;
+    prevCode.current = matched.sku;
+    setF((p) => ({
+      ...p,
+      brand: matched.brand?.name ?? p.brand,
+      description: matched.description ?? matched.name ?? p.description,
+      uom: (matched.specs as any)?.uom ?? p.uom,
+      color: (matched.specs as any)?.color ?? p.color,
+      srp: matched.retail_price ?? matched.base_price ? String(matched.retail_price ?? matched.base_price) : p.srp,
+      discountedPrice: matched.cost_price ? String(matched.cost_price) : p.discountedPrice,
+    }));
+  }, [matched]);
+
+  function reset() { setF(EMPTY); prevCode.current = ""; clearImage(); }
 
   async function submit() {
-    if (!productId || !warehouseId) return toast.error("Piliin ang ITEM CODE at LOCATION");
-    await ins.mutateAsync({ product_id: productId, warehouse_id: warehouseId, quantity, reorder_point: reorder });
-    toast.success("Stock record created"); onClose(); reset();
+    if (!f.itemCode.trim()) return toast.error("Item code is required");
+    if (!f.location) return toast.error("Location is required");
+    setBusy(true);
+    try {
+      // resolve or create brand
+      let brandId: string | null = null;
+      if (f.brand.trim()) {
+        const { data: bx } = await (supabase as any).from("brands").select("id").ilike("name", f.brand.trim()).maybeSingle();
+        if (bx) {
+          brandId = bx.id;
+        } else {
+          const { data: nb, error: be } = await (supabase as any).from("brands").insert({ name: f.brand.trim() }).select("id").single();
+          if (be) throw be;
+          brandId = nb.id;
+        }
+      }
+
+      // upload image if provided
+      let uploadedImageUrl: string | null = null;
+      if (imageFile) {
+        const ext = imageFile.name.split(".").pop() ?? "jpg";
+        const path = `products/${f.itemCode.trim().replace(/[^a-zA-Z0-9-_]/g, "_")}_${Date.now()}.${ext}`;
+        const { error: upErr } = await (supabase as any).storage.from("product-images").upload(path, imageFile, { upsert: true });
+        if (upErr) throw upErr;
+        const { data: urlData } = (supabase as any).storage.from("product-images").getPublicUrl(path);
+        uploadedImageUrl = urlData?.publicUrl ?? null;
+      }
+
+      // resolve or create product
+      let productId: string;
+      const { data: px } = await (supabase as any).from("products").select("id").eq("sku", f.itemCode.trim()).maybeSingle();
+      if (px) {
+        productId = px.id;
+        await (supabase as any).from("products").update({
+          ...(brandId && { brand_id: brandId }),
+          ...(f.description && { description: f.description, name: f.description }),
+          specs: { uom: f.uom, color: f.color },
+          ...(f.srp && { retail_price: Number(f.srp) }),
+          ...(f.discountedPrice && { cost_price: Number(f.discountedPrice) }),
+          ...(uploadedImageUrl && { image_url: uploadedImageUrl }),
+        }).eq("id", productId);
+      } else {
+        const { data: np, error: pe } = await (supabase as any).from("products").insert({
+          sku: f.itemCode.trim(),
+          name: f.description || f.itemCode.trim(),
+          description: f.description || null,
+          brand_id: brandId,
+          specs: { uom: f.uom, color: f.color },
+          retail_price: f.srp ? Number(f.srp) : null,
+          cost_price: f.discountedPrice ? Number(f.discountedPrice) : null,
+          ...(uploadedImageUrl && { image_url: uploadedImageUrl }),
+        }).select("id").single();
+        if (pe) throw pe;
+        productId = np.id;
+      }
+
+      // create inventory level
+      const { error: le } = await (supabase as any).from("inventory_levels").insert({
+        product_id: productId,
+        warehouse_id: f.location,
+        quantity: Number(f.qty) || 0,
+        reorder_point: Number(f.reorder) || 0,
+      });
+      if (le) throw le;
+
+      qc.invalidateQueries({ queryKey: ["inventory_levels"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      toast.success("Stock record created");
+      onClose(); reset();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to create record");
+    } finally { setBusy(false); }
   }
+
+  const inp = "w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { onClose(); reset(); } }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Add Stock Record</DialogTitle></DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-3 mt-1">
 
-          {/* ITEM CODE — searchable product picker */}
-          <Field label="ITEM CODE *">
-            <select value={productId} onChange={(e) => setProductId(e.target.value)}
-              className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm">
-              <option value="">— Select Item Code —</option>
-              {(products as any[]).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.sku} — {p.brand?.name ?? ""} {p.category?.name ?? ""} {p.description ?? ""}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          {/* Show product info once selected — mirrors Excel row */}
-          {selectedProduct && (
-            <div className="rounded-xl bg-secondary/50 px-3 py-2 text-xs space-y-0.5">
-              <div className="flex gap-2 flex-wrap">
-                <span className="font-bold text-primary">{selectedProduct.brand?.name}</span>
-                <span>·</span>
-                <span>{selectedProduct.category?.name}</span>
-                {uom && <><span>·</span><span className="font-semibold">{uom}</span></>}
-              </div>
-              <div className="text-muted-foreground">{selectedProduct.description ?? selectedProduct.name}</div>
+          {/* Image upload */}
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageSelect(f); e.target.value = ""; }} />
+          {imagePreview ? (
+            <div className="relative rounded-xl overflow-hidden border border-border bg-secondary/30 h-40 flex items-center justify-center">
+              <img src={imagePreview} alt="preview" className="h-full w-full object-contain" />
+              <button onClick={clearImage}
+                className="absolute top-2 right-2 bg-black/60 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-black/80">✕</button>
+            </div>
+          ) : (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) handleImageSelect(f); }}
+              className={`rounded-xl border-2 border-dashed h-32 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors
+                ${dragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-secondary/40"}`}
+            >
+              <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-xl">🖼️</div>
+              <p className="text-sm font-medium text-muted-foreground">Click or drag to upload product image</p>
+              <p className="text-[11px] text-muted-foreground">PNG, JPG, WEBP — max 5 MB</p>
             </div>
           )}
 
-          {/* LOCATION */}
-          <Field label="LOCATION (Rack / Warehouse) *">
-            <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}
-              className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="ITEM CODE *">
+              <input value={f.itemCode} onChange={(e) => set("itemCode", e.target.value)}
+                placeholder="e.g. ADZ-001" className={inp} />
+            </Field>
+            <Field label="BRAND">
+              <input value={f.brand} onChange={(e) => set("brand", e.target.value)}
+                placeholder="e.g. RUGGED PRO" className={inp} />
+            </Field>
+          </div>
+
+          <Field label="DESCRIPTION">
+            <input value={f.description} onChange={(e) => set("description", e.target.value)}
+              placeholder="e.g. HILUX REVO 2012-2024 RED" className={inp} />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="UOM">
+              <input value={f.uom} onChange={(e) => set("uom", e.target.value)}
+                placeholder="e.g. Pc, Sets, Box" className={inp} />
+            </Field>
+            <Field label="COLOR">
+              <input value={f.color} onChange={(e) => set("color", e.target.value)}
+                placeholder="e.g. Black, Red" className={inp} />
+            </Field>
+          </div>
+
+          <Field label="LOCATION *">
+            <select value={f.location} onChange={(e) => set("location", e.target.value)} className={inp}>
               <option value="">— Select Location —</option>
               {(warehouses as any[]).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           </Field>
 
-          {/* WHSE BEGINNING + Reorder */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label={`WHSE BEGINNING${uom ? ` (${uom})` : ""}`}>
-              <input type="number" min={0} value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
-                className="w-full h-10 px-3 rounded-lg border border-border text-sm" />
+            <Field label="SRP (₱)">
+              <input type="number" min={0} value={f.srp} onChange={(e) => set("srp", e.target.value)}
+                placeholder="0" className={inp} />
             </Field>
-            <Field label="REORDER POINT">
-              <input type="number" min={0} value={reorder}
-                onChange={(e) => setReorder(Number(e.target.value))}
-                className="w-full h-10 px-3 rounded-lg border border-border text-sm" />
+            <Field label="DISCOUNTED PRICE (₱)">
+              <input type="number" min={0} value={f.discountedPrice} onChange={(e) => set("discountedPrice", e.target.value)}
+                placeholder="0" className={inp} />
             </Field>
           </div>
 
-          <button onClick={submit} disabled={!productId || !warehouseId}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="WHSE BEGINNING">
+              <input type="number" min={0} value={f.qty} onChange={(e) => set("qty", e.target.value)}
+                placeholder="0" className={inp} />
+            </Field>
+            <Field label="REORDER POINT">
+              <input type="number" min={0} value={f.reorder} onChange={(e) => set("reorder", e.target.value)}
+                placeholder="0" className={inp} />
+            </Field>
+          </div>
+
+          {matched && (
+            <p className="text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+              ✓ Existing product found — fields auto-filled. Changes will update the product record.
+            </p>
+          )}
+
+          <button onClick={submit} disabled={busy || !f.itemCode.trim() || !f.location}
             className="w-full h-10 rounded-xl bg-primary text-primary-foreground font-bold text-sm disabled:opacity-50">
-            Add to Inventory
+            {busy ? "Saving…" : "Add to Inventory"}
           </button>
         </div>
       </DialogContent>
@@ -892,21 +1065,21 @@ function MovementsTab() {
       </div>
       <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
         <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-[11px] uppercase tracking-wider text-muted-foreground bg-secondary/60">
+        <table className="w-full text-xs">
+          <thead className="text-[10px] uppercase tracking-wider text-muted-foreground bg-secondary/60">
             <tr>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">DATE</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">MOVEMENT TYPE</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">ITEM CODE</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">BRAND</th>
-              <th className="text-left font-semibold px-4 py-3">DESCRIPTION</th>
-              <th className="text-right font-semibold px-4 py-3 whitespace-nowrap">QTY</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">STOCK FROM</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">REFERENCE #</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">PREPARED BY</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">DELIVERED BY</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">RECEIVED BY</th>
-              <th className="text-left font-semibold px-4 py-3 whitespace-nowrap">REMARKS</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">DATE</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">TYPE</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">ITEM CODE</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">BRAND</th>
+              <th className="text-left font-semibold px-2 py-2">DESCRIPTION</th>
+              <th className="text-right font-semibold px-2 py-2 whitespace-nowrap">QTY</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">LOCATION</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">REF #</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">PREPARED BY</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">DELIVERED BY</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">RECEIVED BY</th>
+              <th className="text-left font-semibold px-2 py-2 whitespace-nowrap">REMARKS</th>
             </tr>
           </thead>
           <tbody>
@@ -917,29 +1090,29 @@ function MovementsTab() {
               const isIn = m.quantity > 0;
               return (
                 <tr key={m.id} className="border-t border-border hover:bg-secondary/40">
-                  <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                  <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">
                     {new Date(m.created_at).toLocaleDateString("en-PH")}
                   </td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isIn ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"}`}>
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    <span className={`font-bold px-1.5 py-0.5 rounded-full ${isIn ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"}`}>
                       {label}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-xs font-semibold text-muted-foreground whitespace-nowrap">{m.product?.sku ?? "—"}</td>
-                  <td className="px-4 py-2.5 font-medium whitespace-nowrap">{m.product?.brand?.name ?? "—"}</td>
-                  <td className="px-4 py-2.5 max-w-[240px]" title={[m.product?.category?.name, m.product?.description ?? m.product?.name].filter(Boolean).join(" · ")}>
+                  <td className="px-2 py-1.5 font-mono font-semibold text-muted-foreground whitespace-nowrap">{m.product?.sku ?? "—"}</td>
+                  <td className="px-2 py-1.5 font-medium whitespace-nowrap">{m.product?.brand?.name ?? "—"}</td>
+                  <td className="px-2 py-1.5 max-w-[180px]" title={[m.product?.category?.name, m.product?.description ?? m.product?.name].filter(Boolean).join(" · ")}>
                     <div className="truncate">{m.product?.description ?? m.product?.name ?? "—"}</div>
-                    {m.product?.category?.name && <div className="text-[11px] text-muted-foreground truncate">{m.product?.category?.name}</div>}
+                    {m.product?.category?.name && <div className="text-[10px] text-muted-foreground truncate">{m.product?.category?.name}</div>}
                   </td>
-                  <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap ${isIn ? "text-emerald-700" : "text-rose-600"}`}>
+                  <td className={`px-2 py-1.5 text-right font-bold whitespace-nowrap ${isIn ? "text-emerald-700" : "text-rose-600"}`}>
                     {isIn ? "+" : ""}{m.quantity}
                   </td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">{m.warehouse?.name ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-xs whitespace-nowrap">{(m as any).reference_number ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-xs whitespace-nowrap">{(m as any).prepared_by ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-xs whitespace-nowrap">{(m as any).delivered_by ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-xs whitespace-nowrap">{(m as any).received_by ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{m.notes ?? "—"}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">{m.warehouse?.name ?? "—"}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">{(m as any).reference_number ?? "—"}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">{(m as any).prepared_by ?? "—"}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">{(m as any).delivered_by ?? "—"}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">{(m as any).received_by ?? "—"}</td>
+                  <td className="px-2 py-1.5 text-muted-foreground">{m.notes ?? "—"}</td>
                 </tr>
               );
             })}

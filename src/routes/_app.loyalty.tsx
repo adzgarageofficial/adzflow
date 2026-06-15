@@ -165,7 +165,7 @@ function LoyaltyPage() {
                   );
                 })}
               {(customers as any[]).length === 0 && (
-                <tr><td colSpan={4} className="px-5 py-10 text-center text-muted-foreground">Walang customers pa.</td></tr>
+                <tr><td colSpan={4} className="px-5 py-10 text-center text-muted-foreground">No customers yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -190,7 +190,7 @@ function LoyaltyPage() {
                 {isLoading ? (
                   <tr><td colSpan={4} className="px-5 py-10 text-center text-muted-foreground">Loading…</td></tr>
                 ) : (txns as any[]).length === 0 ? (
-                  <tr><td colSpan={4} className="px-5 py-10 text-center text-muted-foreground">Walang transactions pa.</td></tr>
+                  <tr><td colSpan={4} className="px-5 py-10 text-center text-muted-foreground">No transactions yet.</td></tr>
                 ) : (
                   (txns as any[]).map((t) => (
                     <tr key={t.id} className="border-t border-border">

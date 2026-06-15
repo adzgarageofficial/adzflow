@@ -65,7 +65,7 @@ function ShiftsPage() {
   return (
     <PageShell
       title="Shifts & Schedules"
-      subtitle="Define work shifts at i-assign sa mga empleyado."
+      subtitle="Define work shifts and assign them to employees."
       actions={
         <div className="flex gap-2">
           <button
@@ -140,7 +140,7 @@ function ShiftsPage() {
         ))}
         {shifts.length === 0 && (
           <div className="col-span-full text-center py-12 text-muted-foreground text-sm">
-            Walang shifts pa. Click "New Shift" para magsimula.
+            No shifts yet. Click "New Shift" to get started.
           </div>
         )}
       </div>

@@ -68,7 +68,7 @@ function Dashboard() {
     const byDay = new Map<string, number>();
 
     for (const o of orders as any[]) {
-      if (o.status === "cancelled") continue;
+      if (o.status !== "paid") continue;
       const d = (o.created_at ?? "").slice(0, 10);
       const total = Number(o.total) || 0;
       if (d === today) dailyRev += total;
@@ -131,7 +131,7 @@ function Dashboard() {
     const salesByProduct = new Map<string, ProductSales>();
     for (const it of orderItems as any[]) {
       const o = it.order;
-      if (!o || o.status === "cancelled" || it.is_service) continue;
+      if (!o || o.status !== "paid" || it.is_service) continue;
       const pid = it.product_id ?? it.product?.id;
       if (!pid) continue;
       const d = (o.created_at ?? "").slice(0, 10);

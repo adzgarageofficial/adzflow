@@ -201,7 +201,7 @@ function BaysPage() {
       qc.invalidateQueries({ queryKey: ["service_queue"] });
       await supabase.from("notifications").insert({
         title: `Bay ${assignBayNum}: Customer Assigned`,
-        body: `${customerName}${plateInfo ? ` (${plateInfo})` : ""} ay naka-assign na sa Bay ${assignBayNum} ni ${actorName}.`,
+        body: `${customerName}${plateInfo ? ` (${plateInfo})` : ""} has been assigned to Bay ${assignBayNum} by ${actorName}.`,
         severity: "info", category: "ops", audience_role: "owner", link: "/bays",
       });
       qc.invalidateQueries({ queryKey: ["bay_queue"] });
@@ -225,7 +225,7 @@ function BaysPage() {
   return (
     <PageShell
       title="Workshop"
-      subtitle="I-click ang job order para i-assign sa bay."
+      subtitle="Click a job order to assign it to a bay."
       actions={
         <a href="/bay-display" target="_blank" rel="noopener noreferrer"
           className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
@@ -261,7 +261,7 @@ function BaysPage() {
 
         {filteredJobs.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
-            Walang active na job orders. Gumawa ng bago sa pamamagitan ng "New Job Order" button.
+            No active job orders. Create one using the "New Job Order" button.
           </div>
         ) : (
           <div className="space-y-2">
@@ -330,7 +330,7 @@ function BaysPage() {
       <section>
         <div className="flex items-center gap-2 mb-3">
           <h2 className="text-sm font-bold">Bay Status</h2>
-          <span className="text-[10px] text-muted-foreground">— i-click ang bay para i-update</span>
+          <span className="text-[10px] text-muted-foreground">— click a bay to update</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {displayBays.map((bay, i) =>
@@ -358,7 +358,7 @@ function BaysPage() {
       {/* ── Assign to Bay dialog ── */}
       <Dialog open={!!assigningJo} onOpenChange={(o) => !o && setAssigningJo(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Assign sa Bay</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Assign to Bay</DialogTitle></DialogHeader>
           {assigningJo && (
             <div className="space-y-3 text-sm">
               <div className="rounded-lg bg-secondary/50 p-3">
@@ -377,7 +377,7 @@ function BaysPage() {
                 {assigningJo.description && <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{assigningJo.description}</div>}
               </div>
               <div>
-                <label className="text-xs font-semibold block mb-1.5">Piliin ang Bay</label>
+                <label className="text-xs font-semibold block mb-1.5">Select Bay</label>
                 <div className="grid grid-cols-4 gap-2">
                   {[1,2,3,4,5,6,7,8].map((n) => {
                     const bay = bays.find((b) => b.bay_number === n);
@@ -390,13 +390,13 @@ function BaysPage() {
                     );
                   })}
                 </div>
-                {emptyBays.length === 0 && <p className="text-xs text-rose-600 mt-2">Lahat ng bay ay busy.</p>}
+                {emptyBays.length === 0 && <p className="text-xs text-rose-600 mt-2">All bays are currently occupied.</p>}
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setAssigningJo(null)} className="flex-1 h-9 rounded-xl border border-border text-sm">Cancel</button>
                 <button onClick={assignJoToBay} disabled={!assignBayNum || assignBusy}
                   className="flex-1 h-9 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">
-                  {assignBusy ? "Saving…" : `Assign sa Bay ${assignBayNum || "—"}`}
+                  {assignBusy ? "Saving…" : `Assign to Bay ${assignBayNum || "—"}`}
                 </button>
               </div>
             </div>
@@ -685,7 +685,7 @@ function BayEditDialog({ bay, onClose, onSaved, actorName }: { bay: BayRow | nul
               <input
                 value={mechanicName}
                 onChange={(e) => setMechanicName(e.target.value)}
-                placeholder="Pangalan ng mekaniko"
+                placeholder="Mechanic name"
                 className="flex-1 h-9 px-3 rounded-xl border border-border bg-card text-sm"
               />
               <button
@@ -717,10 +717,10 @@ function BayEditDialog({ bay, onClose, onSaved, actorName }: { bay: BayRow | nul
 
           {/* Services */}
           <div>
-            <label className="text-xs font-semibold block mb-1.5">Services / Ginagawa</label>
+            <label className="text-xs font-semibold block mb-1.5">Services</label>
             <div className="space-y-1.5 mb-2">
               {services.length === 0 && (
-                <div className="text-xs text-muted-foreground text-center py-2">Walang services pa. Mag-add sa baba.</div>
+                <div className="text-xs text-muted-foreground text-center py-2">No services yet. Add one below.</div>
               )}
               {services.map((s, i) => (
                 <div key={i} className="flex items-center gap-2 rounded-lg bg-secondary/40 px-3 py-2">
@@ -782,7 +782,7 @@ function BayEditDialog({ bay, onClose, onSaved, actorName }: { bay: BayRow | nul
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              placeholder="Mga notes para sa bay na ito…"
+              placeholder="Notes for this bay…"
               className="w-full px-3 py-2 rounded-xl border border-border bg-card text-sm resize-none"
             />
           </div>

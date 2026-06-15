@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
-import { SubNav, PROCUREMENT_NAV } from "@/components/sub-nav";
+import { SubNav, CATALOG_NAV } from "@/components/sub-nav";
 import { AmountInput } from "@/components/ui/amount-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ClipboardList, Plus, Trash2, PackageCheck, X, CheckSquare, Square, Printer, Link2, Clock } from "lucide-react";
@@ -43,14 +43,14 @@ function POPage() {
   return (
     <PageShell
       title="Purchase Orders"
-      subtitle="Mag-order ng stocks galing sa mga suppliers."
+      subtitle="Order stocks from your suppliers."
       actions={
         <button onClick={() => setCreating(true)} className="h-10 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center gap-1.5 shadow-glow">
           <Plus className="h-4 w-4" /> New PO
         </button>
       }
     >
-      <SubNav items={PROCUREMENT_NAV} label="Procurement" />
+      <SubNav items={CATALOG_NAV} label="Catalog" />
       <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-secondary/60 text-xs uppercase tracking-wider text-muted-foreground">
@@ -68,7 +68,7 @@ function POPage() {
             {isLoading ? (
               <tr><td colSpan={7} className="px-6 py-10 text-center text-muted-foreground">Loading…</td></tr>
             ) : (pos as any[]).length === 0 ? (
-              <tr><td colSpan={7} className="px-6 py-10 text-center text-muted-foreground">Wala pang PO. Gumawa ng bago.</td></tr>
+              <tr><td colSpan={7} className="px-6 py-10 text-center text-muted-foreground">No purchase orders yet. Create one to get started.</td></tr>
             ) : (
               (pos as any[]).map((p) => (
                 <tr key={p.id} className="border-t border-border hover:bg-secondary/40 cursor-pointer" onClick={() => setViewing(p)}>
@@ -243,7 +243,7 @@ function NewPODialog({ open, onClose }: { open: boolean; onClose: () => void }) 
                     )}
                   </>
                 ) : (
-                  <div className="text-xs text-muted-foreground italic py-2">Pumili ng supplier sa ibaba para lumabas ang info dito</div>
+                  <div className="text-xs text-muted-foreground italic py-2">Select a supplier below to see their info here</div>
                 )}
               </div>
 
@@ -321,7 +321,7 @@ function NewPODialog({ open, onClose }: { open: boolean; onClose: () => void }) 
                     {items.length === 0 ? (
                       <tr>
                         <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground italic">
-                          Wala pang items. Click "+ Add Item" sa taas.
+                          No items yet. Click "+ Add Item" above.
                         </td>
                       </tr>
                     ) : (
@@ -516,7 +516,7 @@ function PODetailDialog({ po, onClose }: { po: any | null; onClose: () => void }
     const url = `${window.location.origin}/delivery/${token}`;
     try {
       await navigator.clipboard.writeText(url);
-      toast.success("Link copied! I-send sa supplier via Viber/SMS.");
+      toast.success("Link copied! Send it to the supplier via Viber/SMS.");
     } catch {
       toast.info(`Delivery link: ${url}`);
     }
@@ -534,7 +534,7 @@ function PODetailDialog({ po, onClose }: { po: any | null; onClose: () => void }
   const canReceive = po.status !== "received" && po.status !== "cancelled";
 
   const receiveSelected = async () => {
-    if (checkedItems.length === 0) { toast.error("Walang na-check na item"); return; }
+    if (checkedItems.length === 0) { toast.error("No items selected"); return; }
     setBusy(true);
     try {
       const today = new Date().toISOString().slice(0, 10);
@@ -600,7 +600,7 @@ function PODetailDialog({ po, onClose }: { po: any | null; onClose: () => void }
         <div className="rounded-xl border border-border overflow-hidden">
           <div className="bg-secondary/60 px-4 py-2 flex items-center justify-between">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Items — Receiving Checklist</div>
-            {canReceive && <div className="text-[10px] text-muted-foreground">I-check ang dumating, i-adjust qty kung partial, tapos "Receive"</div>}
+            {canReceive && <div className="text-[10px] text-muted-foreground">Check items received, adjust qty if partial, then click "Receive"</div>}
           </div>
           <table className="w-full text-xs">
             <thead className="bg-secondary/30 text-muted-foreground">
@@ -696,10 +696,10 @@ function PODetailDialog({ po, onClose }: { po: any | null; onClose: () => void }
                       {" · "}{(dr.items ?? []).length} item{(dr.items ?? []).length !== 1 ? "s" : ""}
                     </p>
                     {dr.status === "pending" && (
-                      <p className="text-amber-600 mt-0.5 flex items-center gap-1"><Clock className="h-3 w-3" /> Naghihintay ng confirmation</p>
+                      <p className="text-amber-600 mt-0.5 flex items-center gap-1"><Clock className="h-3 w-3" /> Awaiting confirmation</p>
                     )}
                     {dr.rejection_note && (
-                      <p className="text-rose-600 mt-0.5">Dahilan: {dr.rejection_note}</p>
+                      <p className="text-rose-600 mt-0.5">Reason: {dr.rejection_note}</p>
                     )}
                   </div>
                 </div>

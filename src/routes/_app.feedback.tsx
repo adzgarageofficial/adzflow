@@ -100,7 +100,7 @@ function FeedbackPage() {
         {isLoading ? (
           <div className="col-span-2 text-center text-muted-foreground py-10">Loading…</div>
         ) : (feedback as any[]).length === 0 ? (
-          <div className="col-span-2 text-center text-muted-foreground py-10">Wala pang feedback.</div>
+          <div className="col-span-2 text-center text-muted-foreground py-10">No feedback yet.</div>
         ) : (
           (feedback as any[]).map((f) => (
             <div key={f.id} className="rounded-2xl bg-card border border-border p-5 shadow-soft">

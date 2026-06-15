@@ -5,6 +5,11 @@ import { toast } from "sonner";
 export const peso = (n: number) =>
   new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 }).format(n || 0);
 
+export function computeCost(srp: number, chain: number[]): number {
+  if (!chain || chain.length === 0) return srp;
+  return chain.reduce((price, pct) => price * (1 - pct / 100), srp);
+}
+
 function handleErr(e: unknown, fallback = "Something went wrong") {
   const msg = (e as { message?: string })?.message ?? fallback;
   toast.error(msg);
@@ -142,11 +147,27 @@ export const useBookings = () =>
 export const useServices = () =>
   useList<any>("services", { order: { column: "name", ascending: true } });
 
+export const useOilHistory = () =>
+  useList<any>("vehicle_service_logs", {
+    select: "*, vehicle:vehicles(id,make,model,plate_number,mileage,customer:customers(id,full_name,phone)), booking:bookings(id,booking_number,scheduled_at,status)",
+    order: { column: "service_date", ascending: false },
+  });
+
+export const useVehicleServiceLogs = (vehicleId: string) =>
+  useList<any>("vehicle_service_logs", {
+    select: "*, booking:bookings(id,booking_number,scheduled_at,status)",
+    filters: (q: any) => q.eq("vehicle_id", vehicleId),
+    order: { column: "service_date", ascending: false },
+  });
+
 export const useFinanceTxns = () =>
   useList<any>("finance_transactions", { order: { column: "txn_date", ascending: false } });
 
 export const useRecurringBills = () =>
   useList<any>("recurring_bills", { order: { column: "next_due_date", ascending: true } });
+
+export const useCompanyExpenses = () =>
+  useList<any>("company_expenses", { order: { column: "due_date", ascending: true } });
 
 export const useCampaigns = () =>
   useList<any>("marketing_campaigns", { order: { column: "created_at", ascending: false } });
@@ -156,7 +177,7 @@ export const useDiscounts = () =>
 
 export const useInventoryLevels = () =>
   useList<any>("inventory_levels", {
-    select: "*, product:products(id,name,sku,description,specs,base_price,cost_price,retail_price,brand:brands(id,name),category:categories(id,name)), warehouse:warehouses(id,name)",
+    select: "*, product:products(id,name,sku,description,specs,base_price,cost_price,retail_price,brand:brands(id,name,discount_chain),category:categories(id,name)), warehouse:warehouses(id,name)",
   });
 
 export const useQuotations = () =>
@@ -257,7 +278,7 @@ export const useOrderPayments = (orderId?: string) =>
 
 export const useAllOrderItems = () =>
   useList<any>("order_items", {
-    select: "*, order:orders(id,created_at,status,channel), product:products(id,name,category:categories(id,name))",
+    select: "*, order:orders(id,created_at,status,channel), product:products(id,name,cost_price,category:categories(id,name))",
     order: { column: "created_at", ascending: false },
   });
 
@@ -533,6 +554,27 @@ export const useLoyaltyTransactions = (customerId?: string) =>
 export const useCustomerInteractions = (customerId?: string) =>
   useList<any>("customer_interactions", {
     select: "*, customer:customers(id,full_name,phone,email)",
+    order: { column: "created_at", ascending: false },
+    filters: customerId ? (q: any) => q.eq("customer_id", customerId) : undefined,
+  });
+
+export const useCustomerOrders = (customerId?: string) =>
+  useList<any>("orders", {
+    select: "*, customer:customers(id,full_name)",
+    order: { column: "created_at", ascending: false },
+    filters: customerId ? (q: any) => q.eq("customer_id", customerId) : undefined,
+  });
+
+export const useCustomerJobOrders = (customerId?: string) =>
+  useList<any>("job_orders", {
+    select: "*, customer:customers(id,full_name), vehicle:vehicles(id,make,model,plate_number)",
+    order: { column: "created_at", ascending: false },
+    filters: customerId ? (q: any) => q.eq("customer_id", customerId) : undefined,
+  });
+
+export const useCustomerQuotations = (customerId?: string) =>
+  useList<any>("quotations", {
+    select: "*, customer:customers(id,full_name), vehicle:vehicles(id,make,model)",
     order: { column: "created_at", ascending: false },
     filters: customerId ? (q: any) => q.eq("customer_id", customerId) : undefined,
   });

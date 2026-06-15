@@ -32,8 +32,8 @@ export const getPOByToken = createServerFn({ method: "GET" })
 
 const submitSchema = z.object({
   token: z.string(),
-  supplier_name: z.string().min(1, "Ilagay ang iyong pangalan."),
-  delivery_date: z.string().min(1, "Ilagay ang delivery date."),
+  supplier_name: z.string().min(1, "Please enter your name."),
+  delivery_date: z.string().min(1, "Please enter the delivery date."),
   notes: z.string().optional(),
   items: z.array(
     z.object({
@@ -64,7 +64,7 @@ export const submitDeliveryReceipt = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (existing) {
-      throw new Error("May nakasubmit na delivery receipt para sa PO na ito. Hintayin ang confirmation ng ADZ Garage.");
+      throw new Error("A delivery receipt has already been submitted for this PO. Please wait for ADZ Garage confirmation.");
     }
 
     const { data: poItems } = await supabaseAdmin
@@ -77,16 +77,16 @@ export const submitDeliveryReceipt = createServerFn({ method: "POST" })
     for (const item of data.items) {
       if (item.quantity_delivered === 0) continue;
       const poItem = itemMap.get(item.purchase_order_item_id);
-      if (!poItem) throw new Error("Hindi valid ang item.");
+      if (!poItem) throw new Error("Invalid item.");
       const remaining = poItem.quantity - poItem.received_quantity;
       if (item.quantity_delivered > remaining) {
-        throw new Error(`Sobra ang quantity. Max remaining: ${remaining}`);
+        throw new Error(`Quantity exceeds remaining. Max remaining: ${remaining}`);
       }
     }
 
     const deliveredItems = data.items.filter((i) => i.quantity_delivered > 0);
     if (deliveredItems.length === 0) {
-      throw new Error("Walang items na may delivered quantity.");
+      throw new Error("No items have a delivered quantity.");
     }
 
     const { data: receipt, error: receiptErr } = await supabaseAdmin
@@ -101,7 +101,7 @@ export const submitDeliveryReceipt = createServerFn({ method: "POST" })
       .select("id")
       .single();
 
-    if (receiptErr || !receipt) throw new Error("Hindi ma-save ang delivery receipt.");
+    if (receiptErr || !receipt) throw new Error("Failed to save the delivery receipt.");
 
     const { error: itemsErr } = await supabaseAdmin
       .from("po_delivery_receipt_items")
@@ -114,7 +114,7 @@ export const submitDeliveryReceipt = createServerFn({ method: "POST" })
         }))
       );
 
-    if (itemsErr) throw new Error("Hindi ma-save ang mga item.");
+    if (itemsErr) throw new Error("Failed to save delivery items.");
 
     return { receiptId: receipt.id };
   });

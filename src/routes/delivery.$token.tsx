@@ -83,16 +83,16 @@ function DeliveryPage() {
     e.preventDefault();
     if (state.phase !== "form") return;
     if (!supplierName.trim()) {
-      setError("Ilagay ang iyong pangalan.");
+      setError("Please enter your name.");
       return;
     }
     if (!deliveryDate) {
-      setError("Ilagay ang delivery date.");
+      setError("Please enter the delivery date.");
       return;
     }
     const hasAny = state.po.items.some((item) => (qtys[item.id] ?? 0) > 0);
     if (!hasAny) {
-      setError("Walang items na may delivered quantity.");
+      setError("No items have a delivered quantity.");
       return;
     }
     setError(null);
@@ -113,7 +113,7 @@ function DeliveryPage() {
       });
       setState({ phase: "success", poNumber: state.po.po_number });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "May error. Subukan ulit.");
+      setError(err instanceof Error ? err.message : "An error occurred. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -141,7 +141,7 @@ function DeliveryPage() {
             <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
             <h2 className="text-lg font-semibold mb-2">Invalid Link</h2>
             <p className="text-sm text-muted-foreground">
-              Hindi valid ang delivery link na ito. Makipag-ugnayan sa ADZ Garage para sa tamang link.
+              This delivery link is invalid. Please contact ADZ Garage for the correct link.
             </p>
           </div>
         )}
@@ -149,13 +149,13 @@ function DeliveryPage() {
         {state.phase === "already_pending" && (
           <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-border shadow-sm p-8 text-center">
             <Clock className="h-12 w-12 text-blue-500 mx-auto mb-4" />
-            <h2 className="text-lg font-semibold mb-2">Nakasubmit na</h2>
+            <h2 className="text-lg font-semibold mb-2">Already Submitted</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              Nakapag-submit na ng delivery receipt si <strong>{state.supplierName}</strong> noong{" "}
+              <strong>{state.supplierName}</strong> already submitted a delivery receipt on{" "}
               {fmtDate(state.submittedAt)}.
             </p>
             <p className="text-sm text-muted-foreground">
-              Hintayin ang confirmation ng ADZ Garage bago mag-submit ulit.
+              Please wait for ADZ Garage confirmation before submitting again.
             </p>
           </div>
         )}
@@ -163,14 +163,14 @@ function DeliveryPage() {
         {state.phase === "success" && (
           <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-border shadow-sm p-8 text-center">
             <CheckCircle2 className="h-14 w-14 text-emerald-500 mx-auto mb-4" />
-            <h2 className="text-xl font-bold mb-2">Nakapag-submit na!</h2>
+            <h2 className="text-xl font-bold mb-2">Submitted!</h2>
             <p className="text-sm text-muted-foreground mb-1">
-              Natanggap na ng ADZ Garage ang iyong delivery receipt para sa
+              ADZ Garage has received your delivery receipt for
             </p>
             <p className="text-base font-semibold text-foreground mb-4">{state.poNumber}</p>
             <p className="text-sm text-muted-foreground">
-              I-confirm muna ng ADZ Garage ang delivery bago mag-update ang inventory.
-              Maraming salamat!
+              ADZ Garage will confirm the delivery before updating inventory.
+              Thank you!
             </p>
           </div>
         )}
@@ -247,8 +247,8 @@ function DeliveryPage() {
             {/* Items */}
             <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-border shadow-sm overflow-hidden">
               <div className="px-5 py-3 border-b border-border">
-                <h2 className="font-semibold text-sm">Items na Delivered</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Ilagay ang actual na quantity na na-deliver.</p>
+                <h2 className="font-semibold text-sm">Items Delivered</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Enter the actual quantity delivered for each item.</p>
               </div>
               <div className="divide-y divide-border">
                 {(state.po.items ?? []).map((item) => {
@@ -297,7 +297,7 @@ function DeliveryPage() {
               className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-semibold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60"
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
-              {busy ? "Sinasave…" : "I-submit ang Delivery Receipt"}
+              {busy ? "Saving…" : "Submit Delivery Receipt"}
             </button>
 
             <p className="text-center text-xs text-muted-foreground pb-4">

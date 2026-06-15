@@ -143,7 +143,7 @@ function AttendancePage() {
       if (error) throw error;
       toast.success(`Time out: ${emp.first_name} (${totalHours.toFixed(2)}h)`);
     } else {
-      toast.info("Tapos na ang shift ngayong araw.");
+      toast.info("Shift already completed for today.");
     }
     refetch();
   };
@@ -188,11 +188,11 @@ function AttendancePage() {
         </TabsList>
 
         <TabsContent value="today" className="mt-5">
-          <LogsTable logs={logs} empty="Walang attendance log ngayong araw." onPunch={punch} employees={employees} />
+          <LogsTable logs={logs} empty="No attendance logs for today." onPunch={punch} employees={employees} />
         </TabsContent>
 
         <TabsContent value="month" className="mt-5">
-          <LogsTable logs={monthLogs} empty="Walang attendance ngayong buwan." />
+          <LogsTable logs={monthLogs} empty="No attendance logs this month." />
         </TabsContent>
 
         <TabsContent value="qr" className="mt-5">
@@ -249,7 +249,7 @@ function AttendancePage() {
             )}
           </div>
           <p className="text-xs text-muted-foreground text-center">
-            I-point ang camera sa QR code ng employee para mag time-in / time-out.
+            Point the camera at the employee's QR code to time-in / time-out.
           </p>
         </DialogContent>
       </Dialog>

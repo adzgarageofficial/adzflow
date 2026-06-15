@@ -13,7 +13,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const saved = (typeof window !== "undefined" && localStorage.getItem("adz-theme")) as Theme | null;
-    const initial: Theme = saved === "light" || saved === "dark" ? saved : "light";
+    const initial: Theme = saved === "light" || saved === "dark" ? saved : "dark";
     setThemeState(initial);
   }, []);
 

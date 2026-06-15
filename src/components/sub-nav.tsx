@@ -12,9 +12,9 @@ export function SubNav({ items, label }: { items: SubNavItem[]; label?: string }
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
     <div className="relative mb-5">
-      <div className="rounded-xl border border-border bg-card shadow-soft p-1.5 flex items-center gap-1 overflow-x-auto scrollbar-none">
+      <div className="rounded-xl border border-border bg-card/50 shadow-soft p-1 flex items-center gap-0.5 overflow-x-auto scrollbar-none backdrop-blur-sm">
         {label && (
-          <span className="px-3 text-[10px] uppercase tracking-[0.18em] text-muted-foreground shrink-0">
+          <span className="px-3 text-[10px] uppercase tracking-[0.20em] text-muted-foreground/60 font-semibold shrink-0">
             {label}
           </span>
         )}
@@ -25,19 +25,19 @@ export function SubNav({ items, label }: { items: SubNavItem[]; label?: string }
               key={item.url}
               to={item.url}
               className={cn(
-                "shrink-0 inline-flex items-center gap-2 rounded-lg px-3 h-9 text-sm font-medium transition-all",
+                "shrink-0 inline-flex items-center gap-1.5 rounded-lg px-3 h-8 text-[13px] font-semibold transition-all duration-150",
                 active
-                  ? "bg-accent text-accent-foreground shadow-soft"
+                  ? "bg-gradient-red text-white shadow-glow"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground",
               )}
             >
-              {item.icon && <item.icon className={cn("h-4 w-4", active && "text-primary")} />}
+              {item.icon && <item.icon className={cn("h-3.5 w-3.5", active ? "text-white" : "")} />}
               <span>{item.title}</span>
             </Link>
           );
         })}
       </div>
-      <div className="pointer-events-none absolute right-0 top-0 h-full w-10 rounded-r-xl bg-gradient-to-l from-card to-transparent" />
+      <div className="pointer-events-none absolute right-0 top-0 h-full w-10 rounded-r-xl bg-gradient-to-l from-background to-transparent" />
     </div>
   );
 }
@@ -47,7 +47,7 @@ import {
   Truck, ClipboardList, ArrowLeftRight,
   Clock, CalendarClock, Timer, Plane,
   Target, Briefcase, GraduationCap,
-  Gift, MessageSquare, Star,
+  Gift, MessageSquare, Star, History,
   CalendarCheck, Banknote, UserCircle,
   Package, Boxes, Wrench, PackageCheck,
 } from "lucide-react";
@@ -76,6 +76,7 @@ export const ENGAGEMENT_NAV: SubNavItem[] = [
   { title: "Loyalty", url: "/loyalty", icon: Gift },
   { title: "CRM", url: "/crm", icon: MessageSquare },
   { title: "Feedback", url: "/feedback", icon: Star },
+  { title: "Customer History", url: "/customer-history", icon: History },
 ];
 
 export const MY_NAV: SubNavItem[] = [

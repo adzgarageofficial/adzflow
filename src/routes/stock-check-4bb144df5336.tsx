@@ -138,7 +138,9 @@ function StockCheckPage() {
 
         {/* Header */}
         <div className="text-center">
-          <img src={adzLogo} alt="ADZ Garage" className="mx-auto h-12 w-12 rounded-2xl object-cover" />
+          <div className="mx-auto h-12 w-12 rounded-2xl bg-black flex items-center justify-center overflow-hidden">
+            <img src={adzLogo} alt="ADZ Garage" className="h-10 w-10 object-contain" />
+          </div>
           <h1 className="mt-3 text-2xl font-bold tracking-tight">Stock Check</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Search parts · Check quotation history by plate · Print a quote on the spot.
@@ -175,7 +177,7 @@ function StockCheckPage() {
               {quotesLoading ? (
                 <p className="text-xs text-muted-foreground py-2">Checking…</p>
               ) : plateQuotes.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-2">Walang existing quotation para sa plate na ito.</p>
+                <p className="text-xs text-muted-foreground py-2">No existing quotation for this plate.</p>
               ) : (
                 <div className="space-y-1.5">
                   {plateQuotes.map((q: any) => (
@@ -420,9 +422,11 @@ function StockCheckPage() {
               {/* ── Header ── */}
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <img src={logoSrc} alt={companyName}
-                    className="h-14 w-14 rounded-xl object-cover shrink-0"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = adzLogo; }} />
+                  <div className="h-14 w-14 rounded-xl bg-black flex items-center justify-center overflow-hidden shrink-0">
+                    <img src={logoSrc} alt={companyName}
+                      className="h-12 w-12 object-contain"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = adzLogo; }} />
+                  </div>
                   <div className="space-y-0.5">
                     <div className="text-[15px] font-extrabold tracking-tight leading-tight">{companyName}</div>
                     {companyAddress && <div className="text-zinc-500 text-[10px]">{companyAddress}</div>}

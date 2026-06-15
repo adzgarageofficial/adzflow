@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
 import { AmountInput } from "@/components/ui/amount-input";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import {
   useProducts, useCustomers, useBranches, useOrders, useVehicles, peso,
   useMyProfile, useCurrentUserRoles, useDiscountApprovals, useInsert, useUpdate, useInventoryLevels, useList,
@@ -13,7 +14,7 @@ import {
   Search, Plus, Minus, Trash2, Banknote, Smartphone, CreditCard,
   Building2, Link2, Check, Receipt, Pause, FileText, Undo2, PlusCircle, Wrench, Hammer, Package,
   Printer, ScanBarcode, Car, Download, ShieldCheck, ShieldAlert, ShieldQuestion, Hourglass, X, CalendarClock, Truck, ShoppingBag,
-  BookmarkPlus, Upload, ImageIcon, Tag, Mail, Phone,
+  BookmarkPlus, Upload, ImageIcon, Tag, Mail, Phone, KeyRound, Eye, EyeOff,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -61,7 +62,7 @@ const methods = [
 const FULFILLMENT_TYPES = [
   { id: "takeout", label: "Takeout", icon: ShoppingBag },
   { id: "shipping", label: "Shipping", icon: Truck },
-  { id: "installation", label: "Ikakabit", icon: Wrench },
+  { id: "installation", label: "Install", icon: Wrench },
 ] as const;
 
 const FULFILLMENT_LABELS: Record<string, string> = {
@@ -147,12 +148,25 @@ function POSPage() {
   const reservePlateDisplay = reserveVehicle?.plate_number ?? walkInPlate;
   const [showCustomLabor, setShowCustomLabor] = useState(false);
   const [laborItem, setLaborItem] = useState({ name: "Labor", price: "", qty: "1" });
+  const [showCustomInstall, setShowCustomInstall] = useState(false);
+  const [installItem, setInstallItem] = useState({ name: "Installation fee", price: "" });
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [parkedJoId, setParkedJoId] = useState<string | null>(null);
+
+  // Discount auth modal (local manager password override)
+  const [showDiscountAuth, setShowDiscountAuth] = useState(false);
+  const [discountAuthEmail, setDiscountAuthEmail] = useState("");
+  const [discountAuthPwd, setDiscountAuthPwd] = useState("");
+  const [discountAuthShowPwd, setDiscountAuthShowPwd] = useState(false);
+  const [discountAuthing, setDiscountAuthing] = useState(false);
+  const [discountAuthError, setDiscountAuthError] = useState("");
+  const [locallyApprovedBy, setLocallyApprovedBy] = useState<{ name: string; amount: number } | null>(null);
 
   useEffect(() => { setParked(loadLS<Suspended>(PARK_KEY)); setDrafts(loadLS<Suspended>(DRAFT_KEY)); }, []);
   useEffect(() => { saveLS(PARK_KEY, parked); }, [parked]);
   useEffect(() => { saveLS(DRAFT_KEY, drafts); }, [drafts]);
+
+  const prevDiscountRef = useRef(0);
 
   // Sum quantity across all warehouses per product
   const stockByProduct = useMemo(() => {
@@ -217,12 +231,29 @@ function POSPage() {
   // A request only counts once its approved amount still matches what's typed now —
   // editing the discount after approval invalidates it and requires a fresh approval.
   const approvalCurrent = !!discountRequest && Number(discountRequest.amount) === requestedDiscount && requestedDiscount > 0;
-  const discountApproved = approvalCurrent && discountRequest.status === "approved";
-  const discountPending = approvalCurrent && discountRequest.status === "pending";
-  const discountDenied = approvalCurrent && discountRequest.status === "denied";
+  const localDiscountApproved = !!locallyApprovedBy && locallyApprovedBy.amount === requestedDiscount && requestedDiscount > 0;
+  // Owners/admins can apply discounts directly; cashiers need either local password or remote approval
+  const discountApproved = isApprover
+    ? requestedDiscount >= 0
+    : localDiscountApproved || (approvalCurrent && discountRequest.status === "approved");
+  const discountPending = !discountApproved && approvalCurrent && discountRequest?.status === "pending";
+  const discountDenied = !discountApproved && !discountPending && approvalCurrent && discountRequest?.status === "denied";
   const discount = discountApproved ? requestedDiscount : 0;
   const total = subtotal - discount;
   const change = Math.max(0, Number(cashReceived || 0) - total);
+
+  // Auto-open password modal when cashier enters a discount
+  useEffect(() => {
+    const prev = prevDiscountRef.current;
+    prevDiscountRef.current = requestedDiscount;
+    if (requestedDiscount > 0 && prev === 0 && !isApprover) {
+      setLocallyApprovedBy(null);
+      setDiscountAuthError("");
+      setShowDiscountAuth(true);
+    } else if (requestedDiscount !== prev && locallyApprovedBy) {
+      setLocallyApprovedBy(null);
+    }
+  }, [requestedDiscount]);
 
   // Preload cart from quotation handoff
   useEffect(() => {
@@ -281,7 +312,7 @@ function POSPage() {
     return { id: `s-${Date.now()}`, label, cart, discountAmount, customerId, branchId, notes, savedAt: Date.now(), fulfillment, joId };
   }
   function resetSale() {
-    setCart([]); setDiscountAmount(0); setDiscountRequestId(null); setCustomerId(""); setBranchId(""); setCashReceived("");
+    setCart([]); setDiscountAmount(0); setDiscountRequestId(null); setLocallyApprovedBy(null); setCustomerId(""); setBranchId(""); setCashReceived("");
     setPaymentReference(""); setMethod("cash"); setFulfillment("takeout");
     setWalkInName(""); setWalkInEmail(""); setWalkInPhone(""); setWalkInVehicle(""); setWalkInPlate(""); setPendingOrderId(null); setParkedJoId(null);
   }
@@ -397,7 +428,7 @@ function POSPage() {
         link: "/pos",
       });
       qc.invalidateQueries({ queryKey: ["notifications"] });
-      toast.success("Approval request sent — hintayin ang owner/admin");
+      toast.success("Approval request sent — waiting for owner/admin");
     } catch (e: any) {
       toast.error(e.message ?? "Hindi naipadala ang request");
     } finally {
@@ -405,13 +436,60 @@ function POSPage() {
     }
   }
 
+  async function verifyManagerAndApprove() {
+    if (!discountAuthEmail.trim() || !discountAuthPwd.trim()) {
+      setDiscountAuthError("Ilagay ang email at password ng manager/owner");
+      return;
+    }
+    setDiscountAuthing(true);
+    setDiscountAuthError("");
+    try {
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      // Use in-memory storage so this auth doesn't affect the cashier's session
+      const memStore: Record<string, string> = {};
+      const tempClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: {
+          storage: {
+            getItem: (k) => memStore[k] ?? null,
+            setItem: (k, v) => { memStore[k] = v; },
+            removeItem: (k) => { delete memStore[k]; },
+          },
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      });
+      const { data: { user }, error: signInErr } = await tempClient.auth.signInWithPassword({
+        email: discountAuthEmail.trim(),
+        password: discountAuthPwd,
+      });
+      if (signInErr || !user) throw new Error("Mali ang email o password");
+      const { data: roles } = await (tempClient as any).from("user_roles").select("role").eq("user_id", user.id);
+      const isManager = (roles as any[] | null)?.some((r) => ["owner", "admin"].includes(r.role));
+      if (!isManager) throw new Error("Ang account na ito ay walang kapangyarihang mag-approve ng discount");
+      const { data: profile } = await (tempClient as any).from("profiles").select("display_name").eq("id", user.id).maybeSingle();
+      const approverName = (profile as any)?.display_name || discountAuthEmail.trim();
+      await tempClient.auth.signOut();
+      setLocallyApprovedBy({ name: approverName, amount: requestedDiscount });
+      setShowDiscountAuth(false);
+      setDiscountAuthEmail("");
+      setDiscountAuthPwd("");
+      setDiscountAuthShowPwd(false);
+      toast.success(`Discount approved ni ${approverName}`);
+    } catch (e: any) {
+      setDiscountAuthError(e.message || "Hindi na-verify. Subukan ulit.");
+    } finally {
+      setDiscountAuthing(false);
+    }
+  }
+
   async function checkout() {
     if (cart.length === 0) return toast.error("Cart is empty");
     if (requestedDiscount > 0 && !discountApproved) {
-      return toast.error("Kailangan munang aprubahan ng owner/admin ang discount bago mag-checkout");
+      return toast.error("Discount must be approved by the owner/admin before checkout");
     }
     if (method !== "cash" && !paymentReference.trim()) {
-      return toast.error("Ilagay ang reference number / approval code ng bayad");
+      return toast.error("Enter the reference number / approval code for the payment");
     }
     setProcessing(true);
     try {
@@ -515,6 +593,21 @@ function POSPage() {
         });
         if (sErr) console.warn("Stock deduct failed:", sErr.message);
         qc.invalidateQueries({ queryKey: ["inventory_levels"] });
+
+        // Real-time sale notification to owner/admin
+        try {
+          const { data: cashierProfile } = await (supabase as any)
+            .from("profiles").select("display_name").eq("id", userRes.user?.id).maybeSingle();
+          const cashierName = cashierProfile?.display_name ?? "A cashier";
+          await (supabase as any).from("notifications").insert({
+            title: `New Sale – ${peso(total)}`,
+            body: `${cashierName} completed a sale of ${peso(total)} (${order.order_number})`,
+            severity: "success",
+            category: "finance",
+            audience_role: "owner",
+          });
+          qc.invalidateQueries({ queryKey: ["notifications"] });
+        } catch { /* non-blocking */ }
       }
 
       qc.invalidateQueries({ queryKey: ["orders"] });
@@ -718,9 +811,9 @@ function POSPage() {
   }
 
   async function submitReservation() {
-    if (!reserveCustomerName.trim()) return toast.error("Piliin ang customer o ilagay ang pangalan");
-    if (cart.length === 0) return toast.error("Walang items/services sa cart");
-    if (!reserveReceiptFile) return toast.error("I-upload ang reference image");
+    if (!reserveCustomerName.trim()) return toast.error("Select a customer or enter a name");
+    if (cart.length === 0) return toast.error("No items or services in the cart");
+    if (!reserveReceiptFile) return toast.error("Please upload a reference image");
 
     setReserving(true);
     try {
@@ -787,9 +880,7 @@ function POSPage() {
 <button onClick={() => setShowParked(true)} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
           <Pause className="h-3.5 w-3.5" />Parked <span className="text-muted-foreground">({parked.length})</span>
         </button>
-        <button onClick={() => setShowDrafts(true)} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
-          <FileText className="h-3.5 w-3.5" />Drafts <span className="text-muted-foreground">({drafts.length})</span>
-        </button>
+
         <button onClick={() => setShowRefund(true)} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
           <Undo2 className="h-3.5 w-3.5" />Returns & Refunds
         </button>
@@ -807,10 +898,7 @@ function POSPage() {
         <button onClick={() => { setLaborItem({ name: "Labor", price: "", qty: "1" }); setShowCustomLabor(true); }} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
           <Hammer className="h-3.5 w-3.5" />+ Custom Labor
         </button>
-        <button onClick={() => addCustomLine("Service fee", 150, 1, "SERVICE")} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
-          <Wrench className="h-3.5 w-3.5" />+ Service
-        </button>
-        <button onClick={() => addCustomLine("Installation fee", 200, 1, "INSTALL")} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
+        <button onClick={() => { setInstallItem({ name: "Installation fee", price: "" }); setShowCustomInstall(true); }} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
           <Package className="h-3.5 w-3.5" />+ Install
         </button>
         <div className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -848,7 +936,7 @@ function POSPage() {
             activePromos.length === 0 ? (
               <div className="text-center py-16 text-muted-foreground text-sm">
                 <Tag className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                Walang active promos. Gumawa sa Promotions page.
+                No active promos. Create one on the Promotions page.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[70vh] overflow-y-auto pr-1">
@@ -978,7 +1066,7 @@ function POSPage() {
                 <div className="text-[10px] text-amber-600">Email + phone → mapupunta sa marketing list</div>
               </div>
               <input value={walkInName} onChange={(e) => setWalkInName(e.target.value)}
-                placeholder="Pangalan ng customer" className="w-full h-8 px-2 rounded border border-border text-xs bg-background" />
+                placeholder="Customer name" className="w-full h-8 px-2 rounded border border-border text-xs bg-background" />
               <div className="grid grid-cols-2 gap-1.5">
                 <div className="relative">
                   <Mail className="h-3 w-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -1001,7 +1089,7 @@ function POSPage() {
                 <div className="relative">
                   <Car className="h-3 w-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input value={walkInVehicle} onChange={(e) => setWalkInVehicle(e.target.value)}
-                    placeholder="Sasakyan (e.g. Toyota Vios)" className="w-full h-8 pl-6 pr-2 rounded border border-border text-xs bg-background" />
+                    placeholder="Unit (e.g. Toyota Vios)" className="w-full h-8 pl-6 pr-2 rounded border border-border text-xs bg-background" />
                 </div>
                 <input value={walkInPlate} onChange={(e) => setWalkInPlate(e.target.value.toUpperCase())}
                   placeholder="Plate No." className="h-8 px-2 rounded border border-border text-xs bg-background font-mono uppercase" />
@@ -1019,7 +1107,7 @@ function POSPage() {
               <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800 flex items-start gap-1.5">
                 <span className="shrink-0 mt-0.5">⚠</span>
                 <span>
-                  Customer walang {[missingEmail && "email", missingPhone && "phone"].filter(Boolean).join(" at ")} — i-update sa <b>Customers page</b> para makapasok sa marketing list.
+                  Customer has no {[missingEmail && "email", missingPhone && "phone"].filter(Boolean).join(" or ")} — update on the <b>Customers page</b> to include them in the marketing list.
                 </span>
               </div>
             );
@@ -1077,18 +1165,28 @@ function POSPage() {
                   {discountPending && <Hourglass className="h-3.5 w-3.5 shrink-0" />}
                   {!discountApproved && !discountDenied && !discountPending && <ShieldQuestion className="h-3.5 w-3.5 shrink-0" />}
                   <span>
-                    {discountApproved && <>Approved by {discountRequest?.decided_by_name || "owner/admin"}</>}
+                    {discountApproved && localDiscountApproved && <>Approved ni {locallyApprovedBy!.name}</>}
+                    {discountApproved && !localDiscountApproved && isApprover && <>Applied by {myProfile?.display_name || "owner/admin"}</>}
+                    {discountApproved && !localDiscountApproved && !isApprover && <>Approved by {discountRequest?.decided_by_name || "owner/admin"}</>}
                     {discountDenied && <>Denied{discountRequest?.decided_by_name ? ` by ${discountRequest.decided_by_name}` : ""}{discountRequest?.decision_note ? ` — ${discountRequest.decision_note}` : ""}</>}
                     {discountPending && <>Waiting for owner/admin approval…</>}
-                    {!discountApproved && !discountDenied && !discountPending && <>Needs owner/admin approval before checkout</>}
+                    {!discountApproved && !discountDenied && !discountPending && <>Kailangan ng manager password</>}
                   </span>
                 </span>
-                {!discountPending && !discountApproved && (
+                {!isApprover && !discountApproved && (
+                  <button
+                    onClick={() => { setDiscountAuthError(""); setShowDiscountAuth(true); }}
+                    className="h-6 px-2 rounded-md bg-foreground text-background text-[10px] font-semibold shrink-0 inline-flex items-center gap-1"
+                  >
+                    <KeyRound className="h-3 w-3" />{discountDenied ? "Try again" : "Enter password"}
+                  </button>
+                )}
+                {!isApprover && !discountApproved && !discountPending && (
                   <button
                     onClick={requestDiscountApproval} disabled={requestingApproval}
-                    className="h-6 px-2 rounded-md bg-foreground text-background text-[10px] font-semibold disabled:opacity-50 shrink-0"
+                    className="h-6 px-2 rounded-md border border-border text-[10px] font-semibold disabled:opacity-50 shrink-0 hover:bg-secondary"
                   >
-                    {requestingApproval ? "Sending…" : discountDenied ? "Request again" : "Request approval"}
+                    {requestingApproval ? "Sending…" : "Send notif"}
                   </button>
                 )}
               </div>
@@ -1100,7 +1198,13 @@ function POSPage() {
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">Order type</div>
             <div className="grid grid-cols-3 gap-1.5">
               {FULFILLMENT_TYPES.map((f) => (
-                <button key={f.id} onClick={() => setFulfillment(f.id as typeof fulfillment)}
+                <button key={f.id} onClick={() => {
+                  setFulfillment(f.id as typeof fulfillment);
+                  if (f.id === "installation") {
+                    setInstallItem({ name: "Installation fee", price: "" });
+                    setShowCustomInstall(true);
+                  }
+                }}
                   className={`h-9 rounded-lg text-[11px] font-semibold inline-flex items-center justify-center gap-1 border transition ${fulfillment === f.id ? "bg-foreground text-background border-foreground" : "border-border hover:bg-secondary"}`}>
                   <f.icon className="h-3 w-3" />{f.label}
                 </button>
@@ -1134,7 +1238,7 @@ function POSPage() {
                 placeholder={`${methods.find((m) => m.id === method)?.label ?? "Payment"} reference / approval code`}
                 className="w-full h-9 px-3 rounded-lg border border-border text-sm"
               />
-              <div className="text-[10px] text-muted-foreground mt-1">Itype ang reference no. / approval code mula sa kumpirmasyon ng customer — para ito ang ma-track ng owner.</div>
+              <div className="text-[10px] text-muted-foreground mt-1">Enter the reference no. / approval code from the customer's payment confirmation — this is for the owner's tracking.</div>
             </div>
           )}
 
@@ -1145,22 +1249,16 @@ function POSPage() {
 
           <button
             disabled={cart.length === 0}
-            onClick={() => { if (cart.length === 0) return toast.error("Magdagdag muna ng items sa cart bago mag-reserve"); setShowReserve(true); }}
+            onClick={() => { if (cart.length === 0) return toast.error("Add items to the cart before reserving"); setShowReserve(true); }}
             className="mt-2 h-10 w-full rounded-xl border border-amber-300 bg-amber-50 text-amber-800 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-amber-100 disabled:opacity-40"
           >
             <BookmarkPlus className="h-4 w-4" />Reserve
           </button>
 
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <button onClick={parkOrder} disabled={cart.length === 0}
-              className="h-9 rounded-lg border border-border text-xs font-semibold inline-flex items-center justify-center gap-1 hover:bg-secondary disabled:opacity-50">
-              <Pause className="h-3.5 w-3.5" />Park
-            </button>
-            <button onClick={saveDraft} disabled={cart.length === 0}
-              className="h-9 rounded-lg border border-border text-xs font-semibold inline-flex items-center justify-center gap-1 hover:bg-secondary disabled:opacity-50">
-              <FileText className="h-3.5 w-3.5" />Save Draft
-            </button>
-          </div>
+          <button onClick={parkOrder} disabled={cart.length === 0}
+            className="mt-2 h-9 w-full rounded-lg border border-border text-xs font-semibold inline-flex items-center justify-center gap-1 hover:bg-secondary disabled:opacity-50">
+            <Pause className="h-3.5 w-3.5" />Park
+          </button>
         </div>
       </div>
 
@@ -1203,7 +1301,7 @@ function POSPage() {
                   <div className="flex justify-between capitalize"><span>Paid via</span><span>{receipt.method} · {receipt.status}</span></div>
                   {receipt.change > 0 && <div className="flex justify-between text-emerald-700"><span>Change</span><span>{peso(receipt.change)}</span></div>}
                 </div>
-                <div className="text-center text-[10px] text-zinc-500 pt-2">Salamat sa pagbili!</div>
+                <div className="text-center text-[10px] text-zinc-500 pt-2">Thank you for your purchase!</div>
               </div>
               <div className="grid grid-cols-3 gap-2 print:hidden">
                 <button onClick={printReceipt} className="h-10 rounded-xl border border-border text-sm font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-secondary">
@@ -1317,12 +1415,8 @@ function POSPage() {
           <div className="space-y-2">
             <input value={laborItem.name} onChange={(e) => setLaborItem({ ...laborItem, name: e.target.value })}
               placeholder="Labor description (e.g. Engine tune-up)" className="w-full h-10 px-3 rounded-lg border border-border text-sm" />
-            <div className="grid grid-cols-2 gap-2">
-              <AmountInput autoFocus value={laborItem.price} onChange={(val) => setLaborItem({ ...laborItem, price: val ? String(val) : "" })}
-                placeholder="Labor price" className="h-10 px-3 rounded-lg border border-border text-sm" />
-              <input type="number" value={laborItem.qty} onChange={(e) => setLaborItem({ ...laborItem, qty: e.target.value })}
-                placeholder="Qty" className="h-10 px-3 rounded-lg border border-border text-sm" />
-            </div>
+            <AmountInput autoFocus value={laborItem.price} onChange={(val) => setLaborItem({ ...laborItem, price: val ? String(val) : "" })}
+              placeholder="Labor price" className="w-full h-10 px-3 rounded-lg border border-border text-sm" />
             <div className="flex flex-wrap gap-1">
               {[150, 300, 500, 800, 1000, 1500].map((p) => (
                 <button key={p} onClick={() => setLaborItem((l) => ({ ...l, price: String(p) }))}
@@ -1339,6 +1433,25 @@ function POSPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Custom Install */}
+      <Dialog open={showCustomInstall} onOpenChange={setShowCustomInstall}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Package className="h-4 w-4" />Custom Installation Price</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <input value={installItem.name} onChange={(e) => setInstallItem({ ...installItem, name: e.target.value })}
+              placeholder="Installation description (e.g. Tire installation)" className="w-full h-10 px-3 rounded-lg border border-border text-sm" />
+            <AmountInput autoFocus value={installItem.price} onChange={(val) => setInstallItem({ ...installItem, price: val ? String(val) : "" })}
+              placeholder="Installation price" className="w-full h-10 px-3 rounded-lg border border-border text-sm" />
+            <button onClick={() => {
+              const price = Number(installItem.price) || 0;
+              if (!installItem.name || price <= 0) return toast.error("Enter installation name and price");
+              addCustomLine(installItem.name, price, 1, "INSTALL");
+              setShowCustomInstall(false);
+            }} className="w-full h-10 rounded-lg bg-primary text-primary-foreground text-sm font-semibold">Add to Cart</button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Refund / Void */}
       <Dialog open={showRefund} onOpenChange={(o) => { setShowRefund(o); if (!o) setRefundSearch(""); }}>
         <DialogContent className="max-w-lg">
@@ -1348,7 +1461,7 @@ function POSPage() {
             <input
               value={refundSearch}
               onChange={(e) => setRefundSearch(e.target.value)}
-              placeholder="Hanapin ang customer o order number…"
+              placeholder="Search customer or order number…"
               className="w-full h-9 pl-9 pr-3 rounded-lg border border-border text-sm bg-background"
             />
           </div>
@@ -1362,7 +1475,7 @@ function POSPage() {
             });
             if (salesOrders.length === 0) return (
               <div className="text-center py-8 text-sm text-muted-foreground">
-                {q ? `Walang order para sa "${refundSearch}"` : "Walang sales records"}
+                {q ? `No orders found for "${refundSearch}"` : "No sales records"}
               </div>
             );
             return (
@@ -1380,21 +1493,21 @@ function POSPage() {
       <Dialog open={showReserve} onOpenChange={(o) => { if (!reserving) { setShowReserve(o); if (!o) { setReserveReceiptFile(null); setReserveReceiptPreview(null); setReserveRefNumber(""); setReserveVehicleId(""); } } }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><BookmarkPlus className="h-5 w-5 text-amber-600" />Mag-Queue</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><BookmarkPlus className="h-5 w-5 text-amber-600" />Add to Queue</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-sm">
 
             {/* Auto-filled customer + vehicle info */}
             <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
-              <div className="text-[10px] uppercase tracking-wider text-amber-700 font-bold mb-0.5">Auto-fill mula sa sale</div>
+              <div className="text-[10px] uppercase tracking-wider text-amber-700 font-bold mb-0.5">Auto-filled from sale</div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground w-20 shrink-0">Customer</span>
-                <span className="font-semibold text-sm truncate">{reserveCustomerName || <span className="text-muted-foreground italic">Walk-in (walang pangalan)</span>}</span>
+                <span className="font-semibold text-sm truncate">{reserveCustomerName || <span className="text-muted-foreground italic">Walk-in (no name)</span>}</span>
               </div>
 
               {customerId && customerVehicles.length > 0 ? (
                 <div className="flex items-start gap-2">
-                  <span className="text-xs text-muted-foreground w-20 shrink-0 pt-1.5">Sasakyan</span>
+                  <span className="text-xs text-muted-foreground w-20 shrink-0 pt-1.5">Unit</span>
                   <select
                     value={reserveVehicleId || customerVehicles[0]?.id || ""}
                     onChange={(e) => setReserveVehicleId(e.target.value)}
@@ -1409,7 +1522,7 @@ function POSPage() {
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground w-20 shrink-0">Sasakyan</span>
+                  <span className="text-xs text-muted-foreground w-20 shrink-0">Unit</span>
                   <span className="text-sm">{reserveVehicleDisplay || <span className="text-muted-foreground italic">—</span>}</span>
                   {reservePlateDisplay && <span className="text-xs font-mono bg-secondary px-1.5 py-0.5 rounded">{reservePlateDisplay}</span>}
                 </div>
@@ -1475,7 +1588,7 @@ function POSPage() {
                   className="mt-1 w-full h-20 rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground inline-flex flex-col items-center justify-center gap-1 hover:border-amber-400 hover:bg-amber-50/40 transition"
                 >
                   <Upload className="h-4 w-4" />
-                  <span>Mag-upload ng work order / inspection form</span>
+                  <span>Upload work order / inspection form</span>
                 </button>
               )}
             </div>
@@ -1486,7 +1599,69 @@ function POSPage() {
               className="w-full h-11 rounded-xl bg-amber-600 text-white font-semibold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-amber-700"
             >
               <BookmarkPlus className="h-4 w-4" />
-              {reserving ? "Sine-save…" : "I-lagay sa Queue"}
+              {reserving ? "Saving…" : "Add to Queue"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Discount Auth — manager enters password to approve discount on-the-spot */}
+      <Dialog open={showDiscountAuth} onOpenChange={(o) => { if (!discountAuthing) { setShowDiscountAuth(o); if (!o) { setDiscountAuthEmail(""); setDiscountAuthPwd(""); setDiscountAuthShowPwd(false); setDiscountAuthError(""); } } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-amber-600" />Manager Authorization
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 text-xs text-amber-800">
+              Discount na ina-apply: <span className="font-bold">{peso(requestedDiscount)}</span> sa subtotal na {peso(subtotal)}.
+              Kailangan ng password ng owner o admin para ma-approve ito.
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Email ng Manager/Owner</label>
+              <input
+                value={discountAuthEmail}
+                onChange={(e) => setDiscountAuthEmail(e.target.value)}
+                type="email"
+                placeholder="manager@email.com"
+                autoComplete="off"
+                className="mt-1 w-full h-10 px-3 rounded-lg border border-border text-sm bg-background"
+                onKeyDown={(e) => { if (e.key === "Enter") verifyManagerAndApprove(); }}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Password</label>
+              <div className="relative mt-1">
+                <input
+                  value={discountAuthPwd}
+                  onChange={(e) => setDiscountAuthPwd(e.target.value)}
+                  type={discountAuthShowPwd ? "text" : "password"}
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                  className="w-full h-10 pl-3 pr-9 rounded-lg border border-border text-sm bg-background"
+                  onKeyDown={(e) => { if (e.key === "Enter") verifyManagerAndApprove(); }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setDiscountAuthShowPwd((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {discountAuthShowPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            {discountAuthError && (
+              <div className="text-[11px] text-rose-600 font-semibold">{discountAuthError}</div>
+            )}
+            <button
+              onClick={verifyManagerAndApprove}
+              disabled={discountAuthing}
+              className="w-full h-10 rounded-lg bg-primary text-primary-foreground font-semibold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              {discountAuthing ? "Verifying…" : "Authorize Discount"}
             </button>
           </div>
         </DialogContent>
@@ -1657,7 +1832,7 @@ function RefundOrderRow({ order, onRefund, onVoid }: {
         <div className="p-3 border-t border-border space-y-3 bg-secondary/30">
           {isProcessed ? (
             <div className="text-center py-3 text-sm text-muted-foreground">
-              Order na {order.status === "refunded" ? "na-refund" : "na-void"} — hindi na mababago.
+              Order has been {order.status === "refunded" ? "refunded" : "voided"} — this cannot be changed.
             </div>
           ) : (<>
           <div className="flex gap-1">
@@ -1674,11 +1849,11 @@ function RefundOrderRow({ order, onRefund, onVoid }: {
           {isLoading ? (
             <div className="text-xs text-muted-foreground py-2 text-center">Loading items…</div>
           ) : (items as any[]).length === 0 ? (
-            <div className="text-xs text-muted-foreground">Walang items ang order na ito.</div>
+            <div className="text-xs text-muted-foreground">This order has no items.</div>
           ) : tab === "refund" ? (
             <>
               <div className="space-y-1.5">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Piliin ang items na ire-refund</div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Select items to refund</div>
                 {(items as any[]).map((it) => {
                   const qty = selectedQty[it.id] ?? 0;
                   const checked = qty > 0;
@@ -1738,14 +1913,14 @@ function RefundOrderRow({ order, onRefund, onVoid }: {
                 onClick={handleRefund}
                 disabled={processing || overLimit || nothingSelected || parsedAmount <= 0}
                 className="w-full h-9 rounded-lg bg-rose-600 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
-                {processing ? "Processing…" : `I-refund ang ${peso(parsedAmount)}`}
+                {processing ? "Processing…" : `Refund ${peso(parsedAmount)}`}
               </button>
             </>
           ) : (
             <>
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 space-y-1">
                 <div className="font-semibold">Void entire order?</div>
-                <div>Ibibalik ang buong {peso(Number(order.total))} at mire-restore ang inventory. Hindi na ito mababago.</div>
+                <div>The full {peso(Number(order.total))} will be refunded and inventory restored. This cannot be undone.</div>
               </div>
               <input value={reason} onChange={(e) => setReason(e.target.value)}
                 placeholder="Reason (required)" className="w-full h-9 px-3 rounded-lg border border-border text-sm" />

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
-import { SubNav, PROCUREMENT_NAV } from "@/components/sub-nav";
+import { SubNav, CATALOG_NAV } from "@/components/sub-nav";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Truck, Plus, Pencil, Trash2, Mail, Phone } from "lucide-react";
 import { useState } from "react";
@@ -30,7 +30,7 @@ function SuppliersPage() {
         </button>
       }
     >
-      <SubNav items={PROCUREMENT_NAV} label="Procurement" />
+      <SubNav items={CATALOG_NAV} label="Catalog" />
       <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-secondary/60 text-xs uppercase tracking-wider text-muted-foreground">
@@ -47,7 +47,7 @@ function SuppliersPage() {
             {isLoading ? (
               <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">Loading…</td></tr>
             ) : (suppliers as any[]).length === 0 ? (
-              <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">Wala pang suppliers. Mag-add ng bago.</td></tr>
+              <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">No suppliers yet. Add one to get started.</td></tr>
             ) : (
               (suppliers as any[]).map((s) => (
                 <tr key={s.id} className="border-t border-border hover:bg-secondary/40">

@@ -92,7 +92,7 @@ function ReservationsPage() {
       {isLoading ? (
         <div className="text-center py-16 text-sm text-muted-foreground">Loading…</div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-sm text-muted-foreground">Walang reservations na nahanap.</div>
+        <div className="text-center py-16 text-sm text-muted-foreground">No reservations found.</div>
       ) : (
         <div className="space-y-2">
           <AnimatePresence>

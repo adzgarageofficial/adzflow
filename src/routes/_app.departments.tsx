@@ -73,7 +73,7 @@ function DepartmentsTab() {
             {isLoading ? (
               <tr><td colSpan={4} className="px-6 py-10 text-center text-muted-foreground">Loading…</td></tr>
             ) : (departments as any[]).length === 0 ? (
-              <tr><td colSpan={4} className="px-6 py-10 text-center text-muted-foreground">Wala pang departments. Mag-add ng bago.</td></tr>
+              <tr><td colSpan={4} className="px-6 py-10 text-center text-muted-foreground">No departments yet. Add one to get started.</td></tr>
             ) : (
               (departments as any[]).map((d) => (
                 <tr key={d.id} className="border-t border-border hover:bg-secondary/40">
@@ -175,7 +175,7 @@ function PositionsTab() {
             {isLoading ? (
               <tr><td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">Loading…</td></tr>
             ) : (positions as any[]).length === 0 ? (
-              <tr><td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">Wala pang positions.</td></tr>
+              <tr><td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">No positions yet.</td></tr>
             ) : (
               (positions as any[]).map((p) => (
                 <tr key={p.id} className="border-t border-border hover:bg-secondary/40">

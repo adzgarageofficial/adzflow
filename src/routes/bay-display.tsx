@@ -180,7 +180,7 @@ function BayDisplayPage() {
             <div className="flex-1 flex items-center justify-center rounded-2xl border border-gray-800 bg-gray-900/40">
               <div className="text-center text-gray-600">
                 <Users className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <div className="text-sm">Walang naghihintay</div>
+                <div className="text-sm">No one waiting</div>
               </div>
             </div>
           ) : (

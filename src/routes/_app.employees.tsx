@@ -132,7 +132,7 @@ function EmployeesPage() {
             ) : filtered.length === 0 ? (
               <tr><td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
                 <Users2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                Wala pang employee. Click <strong>New Employee</strong> para magsimula.
+                No employees yet. Click <strong>New Employee</strong> to get started.
               </td></tr>
             ) : (
               filtered.map((e) => (
@@ -370,7 +370,7 @@ function EmployeeFormDialog({ editing, departments, positions, branches, onClose
               <Field label="TIN #"><input className="input" value={form.tin_number ?? ""} onChange={(e) => set("tin_number", e.target.value)} /></Field>
             </div>
             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <ShieldAlert className="h-3.5 w-3.5" /> Government IDs ay confidential at gagamitin lang sa payroll computations (Phase 4).
+              <ShieldAlert className="h-3.5 w-3.5" /> Government IDs are confidential and will only be used for payroll computations (Phase 4).
             </p>
           </TabsContent>
         </Tabs>
@@ -565,7 +565,7 @@ function DocumentsSection({ employeeId }: { employeeId: string }) {
 
       <div className="space-y-2">
         {isLoading ? <p className="text-sm text-muted-foreground text-center py-6">Loading documents…</p>
-        : (docs as any[]).length === 0 ? <p className="text-sm text-muted-foreground text-center py-6">Wala pang documents na na-upload.</p>
+        : (docs as any[]).length === 0 ? <p className="text-sm text-muted-foreground text-center py-6">No documents uploaded yet.</p>
         : (docs as any[]).map((d) => (
           <div key={d.id} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:bg-secondary/40">
             <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary grid place-items-center"><FileText className="h-4 w-4" /></div>
@@ -618,7 +618,7 @@ function ContractsSection({ employee }: { employee: any }) {
       </div>
       <div className="space-y-2">
         {isLoading ? <p className="text-sm text-muted-foreground text-center py-6">Loading…</p>
-        : (contracts as any[]).length === 0 ? <p className="text-sm text-muted-foreground text-center py-6">Walang contract pa.</p>
+        : (contracts as any[]).length === 0 ? <p className="text-sm text-muted-foreground text-center py-6">No contracts yet.</p>
         : (contracts as any[]).map((c) => (
           <div key={c.id} className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
             <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary grid place-items-center"><FileText className="h-4 w-4" /></div>
