@@ -38,6 +38,18 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
 
+  // Auto-reload on chunk load failures (stale deployment — browser cached old HTML,
+  // new build replaced the chunk files with different hashes).
+  const isChunkError =
+    error?.message?.includes("Failed to fetch dynamically imported module") ||
+    error?.message?.includes("Importing a module script failed") ||
+    error?.name === "ChunkLoadError";
+
+  if (isChunkError) {
+    window.location.reload();
+    return null;
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
