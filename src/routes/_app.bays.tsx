@@ -7,6 +7,7 @@ import {
   useEmployees, useMyProfile, useJobOrders, useCustomers, useVehicles,
   useInsert, useUpdate, useDelete, useJobOrderHistory, peso, useIsOwner,
 } from "@/lib/db";
+import { QueryError } from "@/components/query-states";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AmountInput } from "@/components/ui/amount-input";
 import {
@@ -136,7 +137,7 @@ const JO_STATUS_COLORS: Record<string, string> = {
 
 // ── Page ────────────────────────────────────────────────────────────────────
 function BaysPage() {
-  const { data: bays = [], isLoading } = useBays();
+  const { data: bays = [], isLoading, isError, error, refetch } = useBays();
   const { data: myProfile } = useMyProfile();
   const qc = useQueryClient();
   const [editing, setEditing] = useState<BayRow | null>(null);
@@ -332,6 +333,7 @@ function BaysPage() {
           <h2 className="text-sm font-bold">Bay Status</h2>
           <span className="text-[10px] text-muted-foreground">— click a bay to update</span>
         </div>
+        {isError && <QueryError message={(error as Error)?.message} onRetry={refetch} />}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {displayBays.map((bay, i) =>
             isLoading ? (

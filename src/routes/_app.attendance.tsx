@@ -21,6 +21,7 @@ import QRCode from "qrcode";
 import { Scanner } from "@yudiel/react-qr-scanner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAttendanceLogs, useEmployees, useEmployeeShifts } from "@/lib/db";
+import { TableSkeleton, QueryError } from "@/components/query-states";
 
 export const Route = createFileRoute("/_app/attendance")({ component: AttendancePage });
 
@@ -49,7 +50,7 @@ function AttendancePage() {
   const today = todayStr();
   const { data: employees = [] } = useEmployees();
   const { data: empShifts = [] } = useEmployeeShifts();
-  const { data: logs = [], refetch } = useAttendanceLogs({ from: today, to: today });
+  const { data: logs = [], refetch, isLoading: logsLoading, isError: logsError, error: logsErr } = useAttendanceLogs({ from: today, to: today });
   const { data: monthLogs = [] } = useAttendanceLogs({
     from: today.slice(0, 8) + "01",
     to: today,
@@ -188,7 +189,7 @@ function AttendancePage() {
         </TabsList>
 
         <TabsContent value="today" className="mt-5">
-          <LogsTable logs={logs} empty="No attendance logs for today." onPunch={punch} employees={employees} />
+          <LogsTable logs={logs} empty="No attendance logs for today." onPunch={punch} employees={employees} isLoading={logsLoading} isError={logsError} errorMsg={(logsErr as Error)?.message} onRetry={refetch} />
         </TabsContent>
 
         <TabsContent value="month" className="mt-5">
@@ -281,12 +282,22 @@ function LogsTable({
   empty,
   onPunch,
   employees,
+  isLoading,
+  isError,
+  errorMsg,
+  onRetry,
 }: {
   logs: any[];
   empty: string;
   onPunch?: (e: any) => void;
   employees?: any[];
+  isLoading?: boolean;
+  isError?: boolean;
+  errorMsg?: string;
+  onRetry?: () => void;
 }) {
+  if (isLoading) return <TableSkeleton rows={5} cols={onPunch ? 8 : 7} />;
+  if (isError) return <QueryError message={errorMsg} onRetry={onRetry} />;
   return (
     <div className="glass-card rounded-2xl overflow-hidden">
       <div className="overflow-x-auto">

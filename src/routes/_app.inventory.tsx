@@ -11,6 +11,7 @@ import {
   Boxes, AlertTriangle, Layers, Search, Plus,
   Archive, TrendingUp, Edit2, Trash2, Download, Upload, Info,
 } from "lucide-react";
+import { KpiSkeleton, QueryError } from "@/components/query-states";
 import { downloadExcel } from "@/lib/export-excel";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
@@ -38,7 +39,7 @@ function Inventory() {
   const [importStockOpen, setImportStockOpen] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
-  const { data: levels = [] } = useInventoryLevels();
+  const { data: levels = [], isLoading: levelsLoading, isError: levelsError, error: levelsErr, refetch: levelsRefetch } = useInventoryLevels();
   useStockAlertNotifications(levels);
 
   const k = useMemo(() => {
@@ -65,15 +66,26 @@ function Inventory() {
         onSelect={(id) => { setTab("Stock"); setHighlightId(id); }}
       />
 
-      <div className="grid grid-cols-2 gap-4 mt-4">
-        <Kpi label="Total Units" value={k.totalUnits.toLocaleString()} icon={Layers} />
-        <Kpi label="SKUs Tracked" value={k.skus} icon={Boxes} />
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
-        <Kpi label="Reserved" value={k.reserved} icon={TrendingUp} />
-        <Kpi label="Low Stock" value={k.low} icon={AlertTriangle} tone="warn" />
-        <Kpi label="Out of Stock" value={k.out} icon={Archive} tone="danger" />
-      </div>
+      {levelsLoading ? (
+        <>
+          <KpiSkeleton count={2} cols="grid-cols-2" />
+          <div className="mt-4"><KpiSkeleton count={3} cols="grid-cols-2 md:grid-cols-3" /></div>
+        </>
+      ) : levelsError ? (
+        <QueryError message={(levelsErr as Error)?.message} onRetry={levelsRefetch} />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <Kpi label="Total Units" value={k.totalUnits.toLocaleString()} icon={Layers} />
+            <Kpi label="SKUs Tracked" value={k.skus} icon={Boxes} />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+            <Kpi label="Reserved" value={k.reserved} icon={TrendingUp} />
+            <Kpi label="Low Stock" value={k.low} icon={AlertTriangle} tone="warn" />
+            <Kpi label="Out of Stock" value={k.out} icon={Archive} tone="danger" />
+          </div>
+        </>
+      )}
 
       <div className="mt-6 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-1 rounded-xl bg-card border border-border shadow-soft p-1 overflow-x-auto">

@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useJobOrders, useCustomers, useVehicles, useInsert, useUpdate, useDelete, useJobOrderHistory, peso, useIsOwner } from "@/lib/db";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { TableSkeleton, QueryError } from "@/components/query-states";
 
 export const Route = createFileRoute("/_app/job-orders")({ component: JobOrdersPage });
 
@@ -20,7 +21,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function JobOrdersPage() {
-  const { data: jobs = [] } = useJobOrders();
+  const { data: jobs = [], isLoading, isError, error, refetch } = useJobOrders();
   const { data: customers = [] } = useCustomers();
   const { data: vehicles = [] } = useVehicles();
   const ins = useInsert("job_orders");
@@ -56,6 +57,11 @@ function JobOrdersPage() {
         </button>
       </div>
 
+      {isLoading ? (
+        <TableSkeleton rows={6} cols={7} />
+      ) : isError ? (
+        <QueryError message={(error as Error)?.message} onRetry={refetch} />
+      ) : (
       <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
         <table className="w-full text-sm">
           <thead className="text-xs uppercase tracking-wider text-muted-foreground bg-secondary/60">
@@ -95,6 +101,7 @@ function JobOrdersPage() {
           </tbody>
         </table>
       </div>
+      )}
 
       <JobDialog open={open} editing={editing} customers={customers} vehicles={vehicles} onClose={() => setOpen(false)}
         onSave={async (v: any) => {

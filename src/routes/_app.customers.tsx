@@ -3,6 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { useCustomers, useOrders, useJobOrders, useInsert, useUpdate, useDelete, peso, useIsOwner } from "@/lib/db";
 import { useMemo, useState } from "react";
 import { Plus, Search, Pencil, Trash2, Mail, Phone, Users, Trophy, TrendingUp, Crown } from "lucide-react";
+import { TableSkeleton, KpiSkeleton, QueryError } from "@/components/query-states";
 import { LeaderboardPodium } from "@/components/ui/leaderboard-podium";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -36,7 +37,7 @@ const RANK_LABEL: Record<number, string> = {
 };
 
 function Customers() {
-  const { data: customers = [], isLoading } = useCustomers();
+  const { data: customers = [], isLoading, isError, error, refetch } = useCustomers();
   const { data: orders = [] } = useOrders();
   const { data: jobOrders = [] } = useJobOrders();
   const insert = useInsert<Customer>("customers");
@@ -94,6 +95,7 @@ function Customers() {
   return (
     <PageShell title="Customers" subtitle="Your loyal community of garage owners.">
       {/* Stat cards */}
+      {isError && <QueryError message={(error as Error)?.message} onRetry={refetch} />}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: "Total Customers", value: stats.total, icon: Users },
@@ -207,6 +209,9 @@ function Customers() {
       </div>
 
       {/* Table */}
+      {isLoading ? (
+        <div className="mt-5"><TableSkeleton rows={6} cols={6} /></div>
+      ) : (
       <div className="mt-5 rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
         <table className="w-full text-sm">
           <thead className="text-xs uppercase tracking-wider text-muted-foreground bg-secondary/60">
@@ -220,9 +225,7 @@ function Customers() {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
-              <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">Loading…</td></tr>
-            ) : filtered.length === 0 ? (
+            {filtered.length === 0 ? (
               <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">No customers yet. Click <strong>New Customer</strong> to add one.</td></tr>
             ) : (
               filtered.map((c) => {
@@ -281,6 +284,7 @@ function Customers() {
           </tbody>
         </table>
       </div>
+      )}
 
       <CustomerDialog
         editing={editing}

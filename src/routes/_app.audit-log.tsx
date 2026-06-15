@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
 import { useAuditLogs } from "@/lib/db";
+import { TableSkeleton, QueryError } from "@/components/query-states";
 import { useMemo, useState } from "react";
 import { ShieldCheck, Download, Search } from "lucide-react";
 import { format } from "date-fns";
@@ -17,7 +18,7 @@ const ACTION_COLOR: Record<string, string> = {
 };
 
 function AuditLogPage() {
-  const { data: logs = [], isLoading } = useAuditLogs();
+  const { data: logs = [], isLoading, isError, error, refetch } = useAuditLogs();
   const [search, setSearch] = useState("");
   const [action, setAction] = useState("");
   const [entity, setEntity] = useState("");
@@ -96,6 +97,11 @@ function AuditLogPage() {
         </select>
       </div>
 
+      {isLoading ? (
+        <TableSkeleton rows={8} cols={5} />
+      ) : isError ? (
+        <QueryError message={(error as Error)?.message} onRetry={refetch} />
+      ) : (
       <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
         <div className="px-5 py-3 border-b border-border flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-primary" />
@@ -113,10 +119,7 @@ function AuditLogPage() {
               </tr>
             </thead>
             <tbody>
-              {isLoading && (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">Loading…</td></tr>
-              )}
-              {!isLoading && filtered.length === 0 && (
+              {filtered.length === 0 && (
                 <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">No audit entries yet.</td></tr>
               )}
               {filtered.map((l: any) => (
@@ -141,6 +144,7 @@ function AuditLogPage() {
           </table>
         </div>
       </div>
+      )}
     </PageShell>
   );
 }

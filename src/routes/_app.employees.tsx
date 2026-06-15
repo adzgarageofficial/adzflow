@@ -20,6 +20,7 @@ import {
   Plus, Search, Pencil, Trash2, Users2, UserCheck, UserX, Briefcase,
   Upload, FileText, Download, IdCard, ShieldAlert,
 } from "lucide-react";
+import { TableSkeleton, QueryError } from "@/components/query-states";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -43,7 +44,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 function EmployeesPage() {
-  const { data: employees = [], isLoading } = useEmployees();
+  const { data: employees = [], isLoading, isError, error, refetch } = useEmployees();
   const { data: departments = [] } = useDepartments();
   const { data: positions = [] } = usePositions();
   const { data: branches = [] } = useBranches();
@@ -113,6 +114,11 @@ function EmployeesPage() {
       </div>
 
       {/* Table */}
+      {isLoading ? (
+        <TableSkeleton rows={6} cols={7} />
+      ) : isError ? (
+        <QueryError message={(error as Error)?.message} onRetry={refetch} />
+      ) : (
       <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-secondary/60 text-xs uppercase tracking-wider text-muted-foreground">
@@ -127,9 +133,7 @@ function EmployeesPage() {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
-              <tr><td colSpan={7} className="px-6 py-10 text-center text-muted-foreground">Loading…</td></tr>
-            ) : filtered.length === 0 ? (
+            {filtered.length === 0 ? (
               <tr><td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
                 <Users2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 No employees yet. Click <strong>New Employee</strong> to get started.
@@ -172,6 +176,7 @@ function EmployeesPage() {
           </tbody>
         </table>
       </div>
+      )}
 
       <EmployeeFormDialog
         editing={editing}

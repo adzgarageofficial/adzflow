@@ -6,6 +6,7 @@ import { PackageCheck, CheckCircle2, XCircle, Clock, AlertTriangle, ChevronDown,
 import { useState } from "react";
 import { toast } from "sonner";
 import { useDeliveryReceipts, usePurchaseOrders } from "@/lib/db";
+import { RowListSkeleton, QueryError } from "@/components/query-states";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -24,7 +25,7 @@ function fmtDate(d: string) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function DeliveriesPage() {
-  const { data: allReceipts = [], isLoading } = useDeliveryReceipts();
+  const { data: allReceipts = [], isLoading, isError, error, refetch } = useDeliveryReceipts();
   const { data: allPOs = [] } = usePurchaseOrders();
   const qc = useQueryClient();
 
@@ -64,7 +65,9 @@ function DeliveriesPage() {
         </div>
 
         {isLoading ? (
-          <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">Loading…</div>
+          <RowListSkeleton rows={3} />
+        ) : isError ? (
+          <QueryError message={(error as Error)?.message} onRetry={refetch} />
         ) : pending.length === 0 ? (
           <div className="rounded-2xl border border-border bg-card p-8 text-center">
             <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3" />

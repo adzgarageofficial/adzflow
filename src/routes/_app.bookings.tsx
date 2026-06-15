@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMe
 import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, Grid3x3, List, Search, Filter, X, Trash2, Droplets } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBookings, useCustomers, useVehicles, useServices, useBranches, useInsert, useUpdate, useDelete, useIsOwner } from "@/lib/db";
+import { QueryError } from "@/components/query-states";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -66,7 +67,7 @@ function formatTime(d: Date) {
 
 /* ── Page ──────────────────────────────────────────────── */
 function BookingsPage() {
-  const { data: bookings = [] } = useBookings();
+  const { data: bookings = [], isLoading, isError, error, refetch } = useBookings();
   const { data: customers = [] } = useCustomers();
   const { data: vehicles = [] } = useVehicles();
   const { data: services = [] } = useServices();
@@ -249,20 +250,33 @@ function BookingsPage() {
       )}
 
       {/* ── calendar views ── */}
-      {view === "month" && (
-        <MonthView currentDate={currentDate} events={filteredEvents}
-          onEventClick={openEdit} onDragStart={(e) => setDraggedId(e.id)} onDragEnd={() => setDraggedId(null)} onDrop={handleDrop} />
-      )}
-      {view === "week" && (
-        <WeekView currentDate={currentDate} events={filteredEvents}
-          onEventClick={openEdit} onDragStart={(e) => setDraggedId(e.id)} onDragEnd={() => setDraggedId(null)} onDrop={handleDrop} />
-      )}
-      {view === "day" && (
-        <DayView currentDate={currentDate} events={filteredEvents}
-          onEventClick={openEdit} onDragStart={(e) => setDraggedId(e.id)} onDragEnd={() => setDraggedId(null)} onDrop={handleDrop} />
-      )}
-      {view === "list" && (
-        <ListView events={filteredEvents} onEventClick={openEdit} />
+      {isLoading ? (
+        <div className="rounded-2xl bg-card border border-border shadow-soft p-12 flex items-center justify-center">
+          <div className="text-center space-y-2">
+            <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
+            <p className="text-sm text-muted-foreground">Loading bookings…</p>
+          </div>
+        </div>
+      ) : isError ? (
+        <QueryError message={(error as Error)?.message} onRetry={refetch} />
+      ) : (
+        <>
+          {view === "month" && (
+            <MonthView currentDate={currentDate} events={filteredEvents}
+              onEventClick={openEdit} onDragStart={(e) => setDraggedId(e.id)} onDragEnd={() => setDraggedId(null)} onDrop={handleDrop} />
+          )}
+          {view === "week" && (
+            <WeekView currentDate={currentDate} events={filteredEvents}
+              onEventClick={openEdit} onDragStart={(e) => setDraggedId(e.id)} onDragEnd={() => setDraggedId(null)} onDrop={handleDrop} />
+          )}
+          {view === "day" && (
+            <DayView currentDate={currentDate} events={filteredEvents}
+              onEventClick={openEdit} onDragStart={(e) => setDraggedId(e.id)} onDragEnd={() => setDraggedId(null)} onDrop={handleDrop} />
+          )}
+          {view === "list" && (
+            <ListView events={filteredEvents} onEventClick={openEdit} />
+          )}
+        </>
       )}
 
       {/* ── booking dialog ── */}

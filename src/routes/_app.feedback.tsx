@@ -6,6 +6,7 @@ import { Star, Plus, MessageCircle, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useCustomerFeedback, useCustomers, useOrders, useInsert, useUpdate } from "@/lib/db";
+import { CardGridSkeleton, QueryError } from "@/components/query-states";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app/feedback")({ component: FeedbackPage });
@@ -23,7 +24,7 @@ function autoSentiment(rating: number): "positive" | "neutral" | "negative" {
 }
 
 function FeedbackPage() {
-  const { data: feedback = [], isLoading } = useCustomerFeedback();
+  const { data: feedback = [], isLoading, isError, error, refetch } = useCustomerFeedback();
   const { data: customers = [] } = useCustomers();
   const { data: orders = [] } = useOrders();
   const insert = useInsert<any>("customer_feedback");
@@ -96,10 +97,13 @@ function FeedbackPage() {
         <Stat label="Negative" value={stats.negative.toLocaleString()} icon={TrendingUp} tone="rose" />
       </div>
 
+      {isLoading ? (
+        <CardGridSkeleton count={4} cols="grid-cols-1 md:grid-cols-2" />
+      ) : isError ? (
+        <QueryError message={(error as Error)?.message} onRetry={refetch} />
+      ) : (
       <div className="grid md:grid-cols-2 gap-5">
-        {isLoading ? (
-          <div className="col-span-2 text-center text-muted-foreground py-10">Loading…</div>
-        ) : (feedback as any[]).length === 0 ? (
+        {(feedback as any[]).length === 0 ? (
           <div className="col-span-2 text-center text-muted-foreground py-10">No feedback yet.</div>
         ) : (
           (feedback as any[]).map((f) => (
@@ -136,6 +140,7 @@ function FeedbackPage() {
           ))
         )}
       </div>
+      )}
 
       <NewFeedbackDialog
         open={creating}

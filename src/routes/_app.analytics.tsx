@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryError } from "@/components/query-states";
 import { cn } from "@/lib/utils";
 import {
   format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths,
@@ -181,11 +182,14 @@ function Analytics() {
   const [preset, setPreset] = useState<PresetKey>("7d");
   const [custom, setCustom] = useState<DateRange | undefined>();
 
-  const { data: orders = [], isLoading: ordersLoading } = useOrders();
-  const { data: orderItems = [], isLoading: itemsLoading } = useAllOrderItems();
+  const { data: orders = [], isLoading: ordersLoading, isError: ordersError, error: ordersErr, refetch: ordersRefetch } = useOrders();
+  const { data: orderItems = [], isLoading: itemsLoading, isError: itemsError, error: itemsErr, refetch: itemsRefetch } = useAllOrderItems();
   const { data: jobs = [] } = useJobOrders();
   const { data: customers = [] } = useCustomers();
   const loading = ordersLoading || itemsLoading;
+  const hasError = ordersError || itemsError;
+  const errMsg = ordersError ? (ordersErr as Error)?.message : itemsError ? (itemsErr as Error)?.message : undefined;
+  const onRetry = () => { ordersRefetch(); itemsRefetch(); };
 
   const range = useMemo(() => rangeForPreset(preset, custom), [preset, custom]);
   const data = useMemo(
@@ -257,6 +261,9 @@ function Analytics() {
           transition={{ duration: 0.25 }}
           className="space-y-6"
         >
+          {/* Error state */}
+          {hasError && <QueryError message={errMsg} onRetry={onRetry} />}
+
           {/* KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard label="Total Revenue" value={peso(data.totalRevenue)} delta={data.growth} icon={DollarSign} loading={loading} />

@@ -13,6 +13,7 @@ import {
   peso, useOrders, useProducts, useJobOrders, useInventoryLevels, useServices,
   useEmployees, usePayslips, useAllOrderItems,
 } from "@/lib/db";
+import { KpiSkeleton } from "@/components/query-states";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -46,7 +47,7 @@ function Dashboard() {
     }
   }, [currentUser.id, can, navigate]);
 
-  const { data: orders = [] } = useOrders();
+  const { data: orders = [], isLoading: ordersLoading } = useOrders();
   const { data: products = [] } = useProducts();
   const { data: orderItems = [] } = useAllOrderItems();
   const { data: jobs = [] } = useJobOrders();
@@ -256,6 +257,9 @@ function Dashboard() {
       </motion.div>
 
       {/* KPI GRID */}
+      {ordersLoading ? (
+        <div className="mb-2"><KpiSkeleton count={6} cols="grid-cols-2 md:grid-cols-3 xl:grid-cols-6" /></div>
+      ) : (
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-2">
         <Kpi label="Today" value={peso(m.dailyRev)} icon={PesoSign} accent />
         <Kpi label="Monthly Revenue" value={peso(m.monthlyRev)} icon={PesoSign} />
@@ -274,6 +278,7 @@ function Dashboard() {
           </>
         )}
       </div>
+      )}
       <button
         onClick={() => setShowAllKpis((v) => !v)}
         className="mb-6 flex items-center gap-1 text-xs font-semibold text-primary hover:underline"

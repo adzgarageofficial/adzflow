@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
 import { peso, useOrders, useProducts } from "@/lib/db";
 import { Globe, ShoppingCart, TrendingUp, Clock3 } from "lucide-react";
+import { KpiSkeleton, QueryError } from "@/components/query-states";
 
 export const Route = createFileRoute("/_app/ecommerce")({ component: Ecommerce });
 
@@ -14,7 +15,7 @@ const STATUS_META: Record<string, string> = {
 };
 
 function Ecommerce() {
-  const { data: orders = [] } = useOrders();
+  const { data: orders = [], isLoading, isError, error, refetch } = useOrders();
   const { data: products = [] } = useProducts();
 
   const m = useMemo(() => {
@@ -39,6 +40,11 @@ function Ecommerce() {
 
   return (
     <PageShell title="Ecommerce" subtitle="Manage your online storefront, listings, and fulfillment.">
+      {isError && <QueryError message={(error as Error)?.message} onRetry={refetch} />}
+      {isLoading ? (
+        <KpiSkeleton count={4} cols="grid-cols-2 md:grid-cols-4" />
+      ) : (
+      <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {stats.map((s) => (
           <div key={s.label} className="rounded-2xl bg-card border border-border shadow-soft p-5">
@@ -124,6 +130,8 @@ function Ecommerce() {
           </div>
         )}
       </div>
+      </>
+      )}
     </PageShell>
   );
 }

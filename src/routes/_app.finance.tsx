@@ -16,6 +16,7 @@ import { downloadExcel } from "@/lib/export-excel";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useFinanceTxns, useCompanyExpenses, useBranches, useInsert, useUpdate, useDelete, useNotifications, peso, useIsOwner } from "@/lib/db";
+import { TableSkeleton, KpiSkeleton, QueryError } from "@/components/query-states";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/finance")({ component: Finance });
@@ -99,7 +100,7 @@ function useExpenseReminderNotifications(expenses: any[]) {
 
 function Finance() {
   const [tab, setTab] = useState<"finance" | "reports">("finance");
-  const { data: txns = [] } = useFinanceTxns();
+  const { data: txns = [], isLoading: txnsLoading, isError: txnsError, error: txnsErr, refetch: txnsRefetch } = useFinanceTxns();
   const { data: branches = [] } = useBranches();
   const ins = useInsert("finance_transactions");
   const canEdit = useIsOwner();
@@ -227,6 +228,10 @@ function Finance() {
       {tab === "finance" && <>
 
         {/* ── Stats ── */}
+        {txnsError && <QueryError message={(txnsErr as Error)?.message} onRetry={txnsRefetch} />}
+        {txnsLoading ? (
+          <KpiSkeleton count={4} cols="grid-cols-2 md:grid-cols-4" />
+        ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {stats.map((s) => (
             <div key={s.label} className="rounded-2xl bg-card border border-border shadow-soft p-5">
@@ -238,6 +243,7 @@ function Finance() {
             </div>
           ))}
         </div>
+        )}
 
         {/* ── Cash Flow chart ── */}
         <div className="mt-6 rounded-2xl bg-card border border-border shadow-soft p-6">
@@ -385,6 +391,9 @@ function Finance() {
           </div>
         </div>
 
+        {txnsLoading ? (
+          <div className="mt-4"><TableSkeleton rows={6} cols={6} /></div>
+        ) : (
         <div className="mt-4 rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
           <table className="w-full text-sm">
             <thead className="text-xs uppercase tracking-wider text-muted-foreground bg-secondary/60">
@@ -434,6 +443,7 @@ function Finance() {
             </tbody>
           </table>
         </div>
+        )}
 
 
         {/* ── General Transaction dialog ── */}

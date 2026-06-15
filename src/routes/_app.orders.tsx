@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
 import { useOrders, useOrderItems, useOrderPayments, peso, useUpdate, useIsOwner } from "@/lib/db";
+import { TableSkeleton, QueryError } from "@/components/query-states";
 import { useState } from "react";
 import { Search, Eye, X, CreditCard, ShoppingBag, Truck, Wrench } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -24,7 +25,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function Orders() {
-  const { data: orders = [], isLoading } = useOrders();
+  const { data: orders = [], isLoading, isError, error, refetch } = useOrders();
   const [q, setQ] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const updateOrder = useUpdate("orders");
@@ -79,6 +80,11 @@ function Orders() {
         <span className="text-xs text-muted-foreground">{filtered.length} orders</span>
       </div>
 
+      {isLoading ? (
+        <TableSkeleton rows={6} cols={7} />
+      ) : isError ? (
+        <QueryError message={(error as Error)?.message} onRetry={refetch} />
+      ) : (
       <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
         <table className="w-full text-sm">
           <thead className="text-xs uppercase tracking-wider text-muted-foreground bg-secondary/60">
@@ -93,9 +99,7 @@ function Orders() {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
-              <tr><td colSpan={7} className="px-6 py-10 text-center text-muted-foreground">Loading…</td></tr>
-            ) : filtered.length === 0 ? (
+            {filtered.length === 0 ? (
               <tr><td colSpan={7} className="px-6 py-10 text-center text-muted-foreground">No orders yet. Process a sale in POS.</td></tr>
             ) : filtered.map((o: any) => (
               <tr key={o.id} onClick={() => setSelectedId(o.id)} className="border-t border-border hover:bg-secondary/40 cursor-pointer">
@@ -140,6 +144,7 @@ function Orders() {
           </tbody>
         </table>
       </div>
+      )}
 
       <OrderDialog
         orderId={selectedId}

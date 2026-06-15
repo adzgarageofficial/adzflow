@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
 import { useState } from "react";
 import { useBrands, useUpdate, computeCost, peso, useIsOwner } from "@/lib/db";
+import { TableSkeleton, QueryError } from "@/components/query-states";
 import { Percent, Plus, X, ChevronRight, Info } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -12,7 +13,7 @@ const SAMPLE_SRP = 5000;
 
 function BrandsCosting() {
   const isOwner = useIsOwner();
-  const { data: brands = [] } = useBrands();
+  const { data: brands = [], isLoading, isError, error, refetch } = useBrands();
   const updateBrand = useUpdate("brands");
   const [editing, setEditing] = useState<any | null>(null);
   const [chain, setChain] = useState<number[]>([]);
@@ -69,6 +70,11 @@ function BrandsCosting() {
         </span>
       </div>
 
+      {isLoading ? (
+        <TableSkeleton rows={5} cols={5} />
+      ) : isError ? (
+        <QueryError message={(error as Error)?.message} onRetry={refetch} />
+      ) : (
       <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
         <table className="w-full text-sm">
           <thead className="text-[11px] uppercase tracking-wider text-muted-foreground bg-secondary/60">
@@ -128,6 +134,7 @@ function BrandsCosting() {
           </tbody>
         </table>
       </div>
+      )}
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-w-md">

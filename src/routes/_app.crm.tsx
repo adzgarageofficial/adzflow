@@ -6,6 +6,7 @@ import { MessageSquare, Plus, Phone, Mail, MapPin, Calendar, AlertCircle } from 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useCustomerInteractions, useCustomers, useInsert } from "@/lib/db";
+import { RowListSkeleton, QueryError } from "@/components/query-states";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app/crm")({ component: CrmPage });
@@ -33,7 +34,7 @@ const TYPE_COLOR: Record<string, string> = {
 };
 
 function CrmPage() {
-  const { data: interactions = [], isLoading } = useCustomerInteractions();
+  const { data: interactions = [], isLoading, isError, error, refetch } = useCustomerInteractions();
   const { data: customers = [] } = useCustomers();
   const insert = useInsert<any>("customer_interactions");
   const [creating, setCreating] = useState(false);
@@ -98,10 +99,13 @@ function CrmPage() {
         ))}
       </div>
 
+      {isLoading ? (
+        <RowListSkeleton rows={5} />
+      ) : isError ? (
+        <QueryError message={(error as Error)?.message} onRetry={refetch} />
+      ) : (
       <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
-        {isLoading ? (
-          <div className="px-6 py-10 text-center text-muted-foreground">Loading…</div>
-        ) : filtered.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="px-6 py-14 text-center text-muted-foreground">No interactions yet.</div>
         ) : (
           <ul className="divide-y divide-border">
@@ -143,6 +147,7 @@ function CrmPage() {
           </ul>
         )}
       </div>
+      )}
 
       <LogDialog open={creating} customers={customers as any[]} onClose={() => setCreating(false)} onSave={submit} />
     </PageShell>

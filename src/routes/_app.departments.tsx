@@ -3,6 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Building2, Briefcase, Plus, Pencil, Trash2 } from "lucide-react";
+import { TableSkeleton, QueryError } from "@/components/query-states";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -42,7 +43,7 @@ function DepartmentsPage() {
 
 /* ---------------- Departments ---------------- */
 function DepartmentsTab() {
-  const { data: departments = [], isLoading } = useDepartments();
+  const { data: departments = [], isLoading, isError, error, refetch } = useDepartments();
   const insert = useInsert<any>("departments");
   const update = useUpdate<any>("departments");
   const del = useDelete("departments");
@@ -59,6 +60,11 @@ function DepartmentsTab() {
         </button>
       </div>
 
+      {isLoading ? (
+        <TableSkeleton rows={4} cols={4} />
+      ) : isError ? (
+        <QueryError message={(error as Error)?.message} onRetry={refetch} />
+      ) : (
       <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-secondary/60 text-xs uppercase tracking-wider text-muted-foreground">
@@ -70,9 +76,7 @@ function DepartmentsTab() {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
-              <tr><td colSpan={4} className="px-6 py-10 text-center text-muted-foreground">Loading…</td></tr>
-            ) : (departments as any[]).length === 0 ? (
+            {(departments as any[]).length === 0 ? (
               <tr><td colSpan={4} className="px-6 py-10 text-center text-muted-foreground">No departments yet. Add one to get started.</td></tr>
             ) : (
               (departments as any[]).map((d) => (
@@ -100,6 +104,7 @@ function DepartmentsTab() {
           </tbody>
         </table>
       </div>
+      )}
 
       <DeptDialog
         editing={editing}
@@ -146,7 +151,7 @@ function DeptDialog({ editing, onClose, onSave, busy }: any) {
 
 /* ---------------- Positions ---------------- */
 function PositionsTab() {
-  const { data: positions = [], isLoading } = usePositions();
+  const { data: positions = [], isLoading: posLoading, isError: posError, error: posErr, refetch: posRefetch } = usePositions();
   const { data: departments = [] } = useDepartments();
   const insert = useInsert<any>("positions");
   const update = useUpdate<any>("positions");
@@ -160,6 +165,11 @@ function PositionsTab() {
           <Plus className="h-4 w-4" /> New Position
         </button>
       </div>
+      {posLoading ? (
+        <TableSkeleton rows={4} cols={5} />
+      ) : posError ? (
+        <QueryError message={(posErr as Error)?.message} onRetry={posRefetch} />
+      ) : (
       <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-secondary/60 text-xs uppercase tracking-wider text-muted-foreground">
@@ -172,9 +182,7 @@ function PositionsTab() {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
-              <tr><td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">Loading…</td></tr>
-            ) : (positions as any[]).length === 0 ? (
+            {(positions as any[]).length === 0 ? (
               <tr><td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">No positions yet.</td></tr>
             ) : (
               (positions as any[]).map((p) => (
@@ -200,6 +208,7 @@ function PositionsTab() {
           </tbody>
         </table>
       </div>
+      )}
 
       <PositionDialog
         editing={editing}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Tag, Plus, Edit2, Trash2, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDiscounts, useInsert, useUpdate, useDelete, useIsOwner } from "@/lib/db";
+import { CardGridSkeleton, QueryError } from "@/components/query-states";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/discounts")({ component: Discounts });
@@ -11,7 +12,7 @@ export const Route = createFileRoute("/_app/discounts")({ component: Discounts }
 const TYPES = ["percentage", "fixed"];
 
 function Discounts() {
-  const { data: discounts = [] } = useDiscounts();
+  const { data: discounts = [], isLoading, isError, error, refetch } = useDiscounts();
   const ins = useInsert("discounts");
   const canEdit = useIsOwner();
   const upd = useUpdate("discounts");
@@ -57,7 +58,11 @@ function Discounts() {
         </button>
       </div>
 
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <CardGridSkeleton count={6} cols="grid-cols-1 md:grid-cols-3" />
+      ) : isError ? (
+        <QueryError message={(error as Error)?.message} onRetry={refetch} />
+      ) : filtered.length === 0 ? (
         <div className="rounded-2xl bg-card border border-border shadow-soft p-10 text-center text-muted-foreground">No discounts yet.</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
