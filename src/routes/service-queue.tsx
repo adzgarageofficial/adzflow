@@ -37,7 +37,7 @@ function useLiveQueue() {
   return useQuery<QueueRow[]>({
     queryKey: ["public_service_queue"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("public_service_queue");
+      const { data, error } = await (supabase as any).rpc("public_service_queue");
       if (error) throw error;
       return (data ?? []) as QueueRow[];
     },

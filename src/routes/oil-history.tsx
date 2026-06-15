@@ -59,7 +59,7 @@ function OilHistoryPage() {
     }
     setDirectSaving(true);
     try {
-      const { data, error } = await supabase.rpc("public_book_appointment_direct", {
+      const { data, error } = await (supabase as any).rpc("public_book_appointment_direct", {
         p_name: directName.trim(),
         p_phone: directPhone.trim() || null,
         p_plate: directPlate.trim() || null,
@@ -95,7 +95,7 @@ function OilHistoryPage() {
     setResults([]);
     setBookingFor(null);
     try {
-      const { data, error } = await supabase.rpc("public_oil_history_lookup", {
+      const { data, error } = await (supabase as any).rpc("public_oil_history_lookup", {
         p_surname: surname.trim(),
         p_plate: plate.trim(),
       });
@@ -119,7 +119,7 @@ function OilHistoryPage() {
     if (!scheduledAt || !bookingFor) return toast.error("Please select a date and time.");
     setSaving(true);
     try {
-      const { data, error } = await supabase.rpc("public_book_appointment", {
+      const { data, error } = await (supabase as any).rpc("public_book_appointment", {
         p_customer_id: bookingFor.customer_id,
         p_vehicle_id: bookingFor.vehicle_id,
         p_scheduled_at: new Date(scheduledAt).toISOString(),

@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
 import { useCustomers, useOrders, useJobOrders, useInsert, useUpdate, useDelete, peso, useIsOwner } from "@/lib/db";
 import { useMemo, useState } from "react";
-import { Plus, Search, Pencil, Trash2, Mail, Phone, Users, Trophy, TrendingUp } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Mail, Phone, Users, Trophy, TrendingUp, Crown } from "lucide-react";
 import { LeaderboardPodium } from "@/components/ui/leaderboard-podium";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
