@@ -84,7 +84,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@ADZGarage" },
     ],
     links: [
-      { rel: "icon", href: "/favicon.png", type: "image/png" },
+      { rel: "icon", href: "/favicon.png?v=2", type: "image/png" },
       {
         rel: "stylesheet",
         href: appCss,
