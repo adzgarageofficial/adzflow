@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/page-shell";
 import { useNotifications, useInsert, useUpdate, useDelete } from "@/lib/db";
 import { useMemo, useState } from "react";
-import { Bell, Plus, Check, Trash2, AlertTriangle, Info, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Bell, Plus, Check, Trash2, AlertTriangle, Info, AlertCircle, CheckCircle2, Smartphone, SmartphoneNfc } from "lucide-react";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format, formatDistanceToNow } from "date-fns";
@@ -23,6 +24,7 @@ function NotificationsPage() {
   const del = useDelete("notifications");
   const [creating, setCreating] = useState(false);
   const [tab, setTab] = useState<"all" | "unread">("all");
+  const push = usePushNotifications();
 
   const filtered = useMemo(() => {
     const arr = notifs as any[];
@@ -69,6 +71,29 @@ function NotificationsPage() {
       subtitle={`${unreadCount} unread · system alerts and broadcasts.`}
       actions={
         <>
+          {push.state === "subscribed" ? (
+            <button
+              onClick={push.unsubscribe}
+              disabled={push.loading}
+              className="h-9 px-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 text-xs font-semibold flex items-center gap-1.5"
+            >
+              <SmartphoneNfc className="h-3.5 w-3.5" />
+              {push.loading ? "..." : "Phone notifs ON"}
+            </button>
+          ) : push.state === "denied" ? (
+            <span className="h-9 px-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-500 text-xs font-semibold flex items-center gap-1.5">
+              <Smartphone className="h-3.5 w-3.5" /> Notifs blocked
+            </span>
+          ) : push.state === "unsupported" ? null : (
+            <button
+              onClick={push.subscribe}
+              disabled={push.loading}
+              className="h-9 px-3 rounded-lg border border-border text-xs font-semibold flex items-center gap-1.5"
+            >
+              <Smartphone className="h-3.5 w-3.5" />
+              {push.loading ? "..." : "Enable phone notifs"}
+            </button>
+          )}
           <button onClick={markAllRead} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold">Mark all read</button>
           <button onClick={() => setCreating(true)} className="h-9 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold flex items-center gap-1.5">
             <Plus className="h-3.5 w-3.5" /> Broadcast

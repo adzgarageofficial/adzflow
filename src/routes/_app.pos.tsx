@@ -19,6 +19,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { downloadElementAsPdf } from "@/lib/pdf";
+import { sendSalePushNotification } from "@/lib/push-notifications";
 
 export const Route = createFileRoute("/_app/pos")({ component: POSPage });
 
@@ -607,6 +608,13 @@ function POSPage() {
             audience_role: "owner",
           });
           qc.invalidateQueries({ queryKey: ["notifications"] });
+          sendSalePushNotification({
+            data: {
+              title: `New Sale – ${peso(total)}`,
+              body: `${cashierName} completed a sale of ${peso(total)} (${order.order_number})`,
+              url: "/orders",
+            },
+          }).catch(() => {});
         } catch { /* non-blocking */ }
       }
 
